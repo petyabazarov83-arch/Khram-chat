@@ -1,0 +1,82 @@
+video.src = msg.content;
+        div.appendChild(video);
+      }
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    });
+
+    // WebRTC Звонки
+    let peerConnection;
+    let localStream;
+    const callModal = document.getElementById('call-modal');
+    const remoteVideo = document.getElementById('remote-video');
+    const startCallBtn = document.getElementById('start-call-btn');
+    const acceptCallBtn = document.getElementById('accept-call-btn');
+    const endCallBtn = document.getElementById('end-call-btn');
+    let incomingOffer, callerId;
+
+    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    async function setupMedia() {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    }
+
+    startCallBtn.addEventListener('click', async () => {
+      callModal.style.display = 'flex';
+      await setupMedia();
+      peerConnection = new RTCPeerConnection(rtcConfig);
+      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      peerConnection.ontrack = e => remoteVideo.srcObject = e.streams[0];
+      peerConnection.onicecandidate = e => e.candidate && socket.emit('ice-candidate', e.candidate);
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('call-user', { offer });
+    });
+
+    socket.on('incoming-call', (data) => {
+      incomingOffer = data.offer;
+      callerId = data.from;
+      callModal.style.display = 'flex';
+      acceptCallBtn.style.display = 'block';
+    });
+
+    acceptCallBtn.addEventListener('click', async () => {
+      acceptCallBtn.style.display = 'none';
+      await setupMedia();
+      peerConnection = new RTCPeerConnection(rtcConfig);
+      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      peerConnection.ontrack = e => remoteVideo.srcObject = e.streams[0];
+      peerConnection.onicecandidate = e => e.candidate && socket.emit('ice-candidate', e.candidate);
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('make-answer', { to: callerId, answer });
+    });
+
+    socket.on('call-answered', async (data) => {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    });
+
+    socket.on('ice-candidate', async (candidate) => {
+      if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+    endCallBtn.addEventListener('click', () => {
+      socket.emit('end-call');
+      closeCall();
+    });
+
+    socket.on('call-ended', closeCall);
+
+    function closeCall() {
+      if (peerConnection) peerConnection.close();
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      callModal.style.display = 'none';
+      acceptCallBtn.style.display = 'none';
+    }
+  </script>
+</body>
+        </html>
