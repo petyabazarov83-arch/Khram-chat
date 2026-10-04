@@ -33,7 +33,6 @@
     .page { display: none; flex: 1; flex-direction: column; overflow: hidden; }
     .page.active { display: flex; }
 
-    /* Профиль и Настройки */
     .profile-card {
       padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; overflow-y: auto;
     }
@@ -51,18 +50,16 @@
       border-radius: 8px; font-family: monospace; color: #f59e0b; width: 100%; max-width: 320px; text-align: center;
     }
 
-    /* Список чатов */
     #chat-list { flex: 1; overflow-y: auto; }
     .chat-item {
       padding: 12px 16px; border-bottom: 1px solid #21262d; display: flex; align-items: center;
-      gap: 12px; cursor: pointer; position: relative;
+      gap: 12px; cursor: pointer;
     }
     .chat-item:hover { background: #161b22; }
     .chat-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #21262d; display: flex; align-items: center; justify-content: center; font-weight: bold; }
     .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #6e7681; display: inline-block; margin-right: 6px; }
     .status-dot.online { background: #22c55e; }
 
-    /* Сообщения */
     #chat-window { flex: 1; display: flex; flex-direction: column; }
     #chat-header { background: #161b22; padding: 8px 16px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
     #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -77,7 +74,6 @@
     .msg-time { font-size: 10px; color: #8b949e; font-weight: normal; }
     .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 0; }
 
-    /* Тelegram-like Кружок */
     .tg-circle {
       width: 160px; height: 160px; border-radius: 50%; object-fit: cover;
       border: 3px solid #f59e0b; cursor: pointer; transition: transform 0.2s, width 0.2s, height 0.2s;
@@ -95,7 +91,6 @@
 
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-    /* Окно записи кружка */
     #circle-modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85);
       flex-direction: column; align-items: center; justify-content: center; z-index: 2000;
@@ -103,13 +98,12 @@
     #circle-video-preview { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; border: 4px solid #f59e0b; }
     #circle-timer { color: #f59e0b; font-weight: bold; margin-top: 10px; font-size: 18px; }
 
-    /* Окно звонка */
     #call-modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000;
       flex-direction: column; align-items: center; justify-content: center; z-index: 1000;
     }
     .video-container { position: relative; width: 100%; max-width: 400px; height: 60vh; background: #161b22; border-radius: 16px; overflow: hidden; }
-    #remote-video { width: 100%; height: 100%; object-fit: cover; }
+    #remote-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
     #local-video { position: absolute; bottom: 12px; right: 12px; width: 100px; height: 140px; border-radius: 10px; object-fit: cover; border: 2px solid #f59e0b; background: #000; }
     .call-btn { background: #22c55e; border: none; color: white; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
   </style>
@@ -131,10 +125,9 @@
       <button class="tab-btn" onclick="switchTab('settings-page')">Настройки</button>
     </div>
 
-    <!-- Страница 1: Список чатов -->
+    <!-- Список чатов -->
     <div id="chats-page" class="page active">
       <div id="chat-list">
-        <!-- Бот по умолчанию -->
         <div class="chat-item" onclick="openChat('bot-assistant', 'ИИ Помощник 🤖', '')">
           <div class="chat-avatar">🤖</div>
           <div>
@@ -145,7 +138,7 @@
       </div>
     </div>
 
-    <!-- Страница 2: Профиль / Чек ID -->
+    <!-- Профиль -->
     <div id="profile-page" class="page">
       <div class="profile-card">
         <div id="avatar-display" class="avatar-preview">👤</div>
@@ -166,7 +159,7 @@
       </div>
     </div>
 
-    <!-- Страница 3: Настройки -->
+    <!-- Настройки -->
     <div id="settings-page" class="page">
       <div class="profile-card">
         <h3>🎵 Настройка рингтона</h3>
@@ -176,7 +169,7 @@
       </div>
     </div>
 
-    <!-- Окно открытого чата -->
+    <!-- Чат -->
     <div id="chat-window-modal" class="page">
       <div id="chat-header">
         <button class="btn-icon" onclick="closeChat()">←</button>
@@ -204,14 +197,14 @@
     </div>
   </div>
 
-  <!-- Модальное окно записи кружка -->
+  <!-- Модалка кружка -->
   <div id="circle-modal">
     <video id="circle-video-preview" autoplay playsinline muted></video>
     <div id="circle-timer">00:00</div>
     <button class="call-btn" id="stop-circle-btn" style="background:#ef4444; margin-top:20px;">Отправить кружок</button>
   </div>
 
-  <!-- Модальное окно звонка -->
+  <!-- Модалка звонка -->
   <div id="call-modal">
     <div class="video-container">
       <video id="remote-video" autoplay playsinline></video>
@@ -229,12 +222,10 @@
   <script>
     const socket = io();
 
-    // Запрос разрешения на Push-уведомления
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
     }
 
-    // Инициализация профиля
     let myProfile = {
       uid: localStorage.getItem('khram_uid') || ('khram-user-' + Math.random().toString(36).substring(2, 8)),
       username: localStorage.getItem('khram_username') || 'Путник',
@@ -248,16 +239,18 @@
       document.getElementById('avatar-display').innerHTML = `<img src="${myProfile.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     }
 
-    socket.emit('register', myProfile);
+    // Регистрируемся при каждом переподключении
+    socket.on('connect', () => {
+      socket.emit('register', myProfile);
+    });
 
     function saveProfile() {
       myProfile.username = document.getElementById('username-input').value.trim() || 'Путник';
       localStorage.setItem('khram_username', myProfile.username);
       socket.emit('register', myProfile);
-      alert('Профиль успешно сохранен!');
+      alert('Профиль сохранен!');
     }
 
-    // Обработка загрузки аватарки
     document.getElementById('avatar-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -277,17 +270,15 @@
     document.getElementById('ringtone-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
-        const maxBytes = 46 * 1024 * 1024; // 46 MB
-        if (file.size > maxBytes) {
-          alert('Ошибка: Файл превышает лимит в 46 МБ!');
-          e.target.value = '';
+        if (file.size > 46 * 1024 * 1024) {
+          alert('Ошибка: Файл больше 46 МБ!');
           return;
         }
         const reader = new FileReader();
         reader.onload = (evt) => {
           localStorage.setItem('khram_ringtone', evt.target.result);
           ringtoneAudio.src = evt.target.result;
-          document.getElementById('ringtone-status').textContent = ' Рингтон успешно сохранен!';
+          document.getElementById('ringtone-status').textContent = ' Рингтон сохранен!';
         };
         reader.readAsDataURL(file);
       }
@@ -296,15 +287,13 @@
       ringtoneAudio.src = localStorage.getItem('khram_ringtone');
     }
 
-    // Сохраненные контакты
+    // Контакты и Онлайн-статус
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
     let activeOnlineUids = [];
 
     function renderContacts() {
       const chatList = document.getElementById('chat-list');
-      // Очищаем динамические контакты
-      const dynamicItems = chatList.querySelectorAll('.dynamic-contact');
-      dynamicItems.forEach(el => el.remove());
+      chatList.querySelectorAll('.dynamic-contact').forEach(el => el.remove());
 
       contacts.forEach(c => {
         const isOnline = activeOnlineUids.includes(c.uid);
@@ -331,7 +320,7 @@
     });
 
     document.getElementById('add-contact-btn').addEventListener('click', () => {
-      const uid = prompt('Введите UID друга:');
+      const uid = prompt('Введите UID контакта:');
       if (uid) {
         if (!contacts.some(c => c.uid === uid)) {
           const name = prompt('Введите имя для контакта:', 'Друг ' + uid.substring(0, 4));
@@ -342,7 +331,6 @@
       }
     });
 
-    // Управление вкладочной навигацией
     function switchTab(pageId) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -350,7 +338,6 @@
       event.target.classList.add('active');
     }
 
-    // Переключение чата
     let currentChatUid = '';
     function openChat(uid, title, avatar) {
       currentChatUid = uid;
@@ -371,7 +358,7 @@
       if (!currentChatUid) return;
       const statusEl = document.getElementById('active-chat-status');
       if (currentChatUid === 'bot-assistant') {
-        statusEl.textContent = '🤖 Всегда онлайн';
+        statusEl.textContent = '🟢 Онлайн';
         statusEl.style.color = '#22c55e';
       } else {
         const isOnline = activeOnlineUids.includes(currentChatUid);
@@ -380,7 +367,6 @@
       }
     }
 
-    // Сохранение и загрузка истории по каждому контакту
     function getHistoryKey(uid) {
       return `chat_history_${myProfile.uid}_${uid}`;
     }
@@ -396,13 +382,16 @@
       const chatKey = (msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
       const key = getHistoryKey(chatKey);
       const saved = JSON.parse(localStorage.getItem(key) || '[]');
-      saved.push(msg);
-      localStorage.setItem(key, JSON.stringify(saved));
+      if (!saved.some(m => m.id === msg.id)) {
+        saved.push(msg);
+        localStorage.setItem(key, JSON.stringify(saved));
+      }
     }
 
-    // Отрисовка сообщений
     const messagesDiv = document.getElementById('messages');
     function renderMessageUI(data) {
+      if (document.getElementById(`msg-${data.id}`)) return;
+
       const isMine = data.senderUid === myProfile.uid;
       const div = document.createElement('div');
       div.className = `msg ${isMine ? 'mine' : 'other'}`;
@@ -427,16 +416,14 @@
         const audio = document.createElement('audio'); audio.src = data.content; audio.controls = true;
         div.appendChild(audio);
       } else if (data.type === 'circle') {
-        // Кружок в стиле Телеграм
         const video = document.createElement('video');
         video.src = data.content;
         video.className = 'tg-circle';
-        video.muted = true; // Без звука по умолчанию
+        video.muted = true;
         video.loop = true;
         video.playsInline = true;
         video.autoplay = true;
 
-        // При клике: увеличение и включение звука
         video.onclick = () => {
           if (video.classList.contains('expanded')) {
             video.classList.remove('expanded');
@@ -466,37 +453,29 @@
       if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
         renderMessageUI(data);
       } else {
-        // Системное Push-уведомление
         if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
           new Notification(`Сообщение от ${data.senderName}`, {
-            body: data.type === 'text' ? data.content : 'Вам прислали медиафайл',
-            icon: data.senderAvatar || '/favicon.ico'
+            body: data.type === 'text' ? data.content : 'Прислан файл',
+            icon: data.senderAvatar || ''
           });
         }
       }
     });
 
-    // Удаление сообщений
     function deleteMessage(msgId) {
-      socket.emit('delete message', { msgId, targetUid: currentChatUid });
-      removeMsgFromUIAndStorage(msgId);
+      socket.emit('delete message', { msgId, senderUid: myProfile.uid, targetUid: currentChatUid });
     }
 
-    function removeMsgFromUIAndStorage(msgId) {
-      const el = document.getElementById(`msg-${msgId}`);
+    socket.on('message deleted', (data) => {
+      const el = document.getElementById(`msg-${data.msgId}`);
       if (el) el.remove();
 
       const key = getHistoryKey(currentChatUid);
       let saved = JSON.parse(localStorage.getItem(key) || '[]');
-      saved = saved.filter(m => m.id !== msgId);
+      saved = saved.filter(m => m.id !== data.msgId);
       localStorage.setItem(key, JSON.stringify(saved));
-    }
-
-    socket.on('message deleted', (data) => {
-      removeMsgFromUIAndStorage(data.msgId);
     });
 
-    // Отправка текста
     const input = document.getElementById('input');
     function sendText() {
       const text = input.value.trim();
@@ -513,7 +492,6 @@
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
-    // Отправка файлов (Картинки, ZIP, APK, Документы)
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file && currentChatUid) {
@@ -533,7 +511,6 @@
       }
     });
 
-    // Запись голосовых сообщений
     let audioRecorder, audioChunks = [], isRecordingAudio = false;
     const micBtn = document.getElementById('mic-btn');
 
@@ -561,7 +538,7 @@
           audioRecorder.start();
           isRecordingAudio = true;
           micBtn.classList.add('recording-active');
-        } catch(e) { alert('Микрофон недоступен или блокирован!'); }
+        } catch(e) { alert('Микрофон недоступен!'); }
       } else {
         if (audioRecorder && audioRecorder.state !== 'inactive') audioRecorder.stop();
         isRecordingAudio = false;
@@ -569,7 +546,6 @@
       }
     });
 
-    // Запись кружков (С ограничением в 2 минуты = 120 секунд)
     let circleStream, circleRecorder, circleChunks = [], circleTimerInterval, circleSeconds = 0;
     const circleBtn = document.getElementById('circle-btn');
     const circleModal = document.getElementById('circle-modal');
@@ -609,15 +585,11 @@
           const mins = String(Math.floor(circleSeconds / 60)).padStart(2, '0');
           const secs = String(circleSeconds % 60).padStart(2, '0');
           circleTimer.textContent = `${mins}:${secs}`;
-
-          // Лимит в 2 минуты (120 секунд)
-          if (circleSeconds >= 120) {
-            stopCircleRecording();
-          }
+          if (circleSeconds >= 120) stopCircleRecording();
         }, 1000);
 
         circleRecorder.start();
-      } catch(e) { alert('Камера или микрофон недоступны!'); }
+      } catch(e) { alert('Камера/микрофон недоступны!'); }
     });
 
     function stopCircleRecording() {
@@ -632,9 +604,15 @@
     const remoteVideo = document.getElementById('remote-video');
     const localVideo = document.getElementById('local-video');
     const acceptCallBtn = document.getElementById('accept-call-btn');
-    let incomingCallerSocketId;
+    let callTargetSocketId = null;
 
-    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
+    };
 
     async function setupCallMedia() {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -649,18 +627,25 @@
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
 
-      peerConnection.ontrack = e => { remoteVideo.srcObject = e.streams[0]; };
+      peerConnection.ontrack = e => {
+        if (e.streams && e.streams[0]) {
+          remoteVideo.srcObject = e.streams[0];
+        }
+      };
+
       peerConnection.onicecandidate = e => {
-        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate });
+        if (e.candidate) {
+          socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate });
+        }
       };
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
-      socket.emit('call-user', { targetUid: currentChatUid, offer });
+      socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer });
     });
 
     socket.on('incoming-call', async (data) => {
-      incomingCallerSocketId = data.fromSocketId;
+      callTargetSocketId = data.fromSocketId;
       callModal.style.display = 'flex';
       acceptCallBtn.style.display = 'block';
 
@@ -676,30 +661,45 @@
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
 
-      peerConnection.ontrack = e => { remoteVideo.srcObject = e.streams[0]; };
+      peerConnection.ontrack = e => {
+        if (e.streams && e.streams[0]) {
+          remoteVideo.srcObject = e.streams[0];
+        }
+      };
+
       peerConnection.onicecandidate = e => {
-        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate });
+        if (e.candidate) {
+          socket.emit('ice-candidate', { toSocketId: callTargetSocketId, candidate: e.candidate });
+        }
       };
 
       await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
-      socket.emit('make-answer', { toSocketId: incomingCallerSocketId, answer });
+      socket.emit('make-answer', { toSocketId: callTargetSocketId, answer });
     });
 
     socket.on('call-answered', async (data) => {
-      if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      }
     });
 
     socket.on('ice-candidate', async (data) => {
-      if (peerConnection && data.candidate) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      if (peerConnection && data.candidate) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch(e){}
+      }
     });
 
     function closeCall() {
       ringtoneAudio.pause();
-      if (peerConnection) peerConnection.close();
-      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      if (peerConnection) { peerConnection.close(); peerConnection = null; }
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      remoteVideo.srcObject = null;
+      localVideo.srcObject = null;
       callModal.style.display = 'none';
       acceptCallBtn.style.display = 'none';
     }
@@ -712,4 +712,4 @@
     socket.on('call-ended', closeCall);
   </script>
 </body>
-  </html>
+        </html>
