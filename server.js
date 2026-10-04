@@ -5,111 +5,157 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // Лимит 100 МБ
+  maxHttpBufferSize: 1e8 // Лимит 100 МБ для файлов и медиа
 });
 
 app.use(express.static('public'));
 
-// Хранилище активных пользователей: { socketId: { uid, username } }
-const users = {};
-const history = {}; // История сообщений по комнатам/чатам
+// Хранилище подключенных пользователей: socketId -> { uid, username, avatar }
+const onlineUsers = new Map();
 
-// Простая функция бота
-function getBotResponse(text) {
-  const q = text.toLowerCase();
-  if (q.includes('салат') || q.includes('приготовить салат')) {
-    return "🥗 Рецепт простого овощного салата:\n1. Нарежьте 2 огурца и 2 помидора.\n2. Добавьте порезанный зеленый лук и петрушку.\n3. Посолите, заправьте 1 ст. л. подсолнечного или оливкового масла.\n4. Перемешайте — готово!";
+// Простая база знаний и ответов для ИИ-бота
+function getAdvancedBotResponse(query) {
+  const q = query.toLowerCase();
+
+  if (q.includes('салат') || q.includes('как приготовить салат')) {
+    return "🥗 **Рецепт классического овощного салата:**\n\n1. **Ингредиенты:** 2 свежих огурца, 2 помидора, 1 болгарский перец, зелень (петрушка/укроп), оливковое или подсолнечное масло, соль и перец по вкусу.\n2. **Приготовление:** Помойте овощи, нарежьте огурцы и помидоры средними ломтиками, перец — соломкой. Мелко накрошите зелень.\n3. **Заправка:** Сложите всё в салатник, посолите, заправьте 1-2 ст. ложками масла и аккуратно перемешайте.\n\nПриятного аппетита! 😋";
   }
-  if (q.includes('привет') || q.includes('здравствуй')) {
-    return "Приветствую в Храме! Чем могу помочь?";
+  
+  if (q.includes('погода') || q.includes('погоду')) {
+    return "☀️ Чтобы узнать точную погоду в вашем городе, уточните название города или воспользуйтесь сервисом Яндекс.Погода / Gismeteo!";
   }
-  if (q.includes('как дела')) {
-    return "Всё отлично! Сервер Храма работает стабильно.";
+
+  if (q.includes('привет') || q.includes('здравствуй') || q.includes('хай')) {
+    return "Приветствую! Я ИИ-помощник Храма. Чем могу помочь? Могу подсказать рецепт, ответить на вопрос или помочь с советом!";
   }
-  return "Я простенький ИИ-бот Храма. Задайте вопрос (например: 'как приготовить салат').";
+
+  if (q.includes('кто ты') || q.includes('что умеешь')) {
+    return "🤖 Я виртуальный ассистент Храма. Я умею отвечать на вопросы, давать кулинарные рецепты, помогать с поисками и поддерживать диалог!";
+  }
+
+  return `🤖 Ответ на Ваш запрос: "${query}"\n\nЯ проанализировал вопрос. Если вам нужен конкретный рецепт, совет или информация по настройкам Храма — просто спросите меня напрямую!`;
 }
 
 io.on('connection', (socket) => {
-  console.log('Подключение:', socket.id);
-
-  // Авторизация / Регистрация аккаунта
+  // Регистрация / обновление профиля
   socket.on('register', (data) => {
-    users[socket.id] = {
-      uid: data.uid || ('khram-user-' + Math.random().toString(36).substring(2, 8)),
-      username: data.username || 'Путник'
-    };
-    socket.emit('registered', users[socket.id]);
+    onlineUsers.set(socket.id, {
+      uid: data.uid,
+      username: data.username || 'Путник',
+      avatar: data.avatar || ''
+    });
+    
+    // Рассылаем список онлайн пользователей
+    broadcastOnlineStatus();
   });
 
-  // Отправка сообщений
+  // Передача сообщений
   socket.on('chat message', (data) => {
-    const sender = users[socket.id] || { uid: 'guest', username: 'Аноним' };
-    const msgData = {
-      id: Date.now(),
+    const sender = onlineUsers.get(socket.id) || { uid: data.senderUid, username: 'Пользователь' };
+
+    const msgPayload = {
+      id: data.id || Date.now(),
       senderUid: sender.uid,
       senderName: sender.username,
+      senderAvatar: sender.avatar,
       targetUid: data.targetUid,
       type: data.type, // 'text', 'image', 'audio', 'circle', 'file'
       content: data.content,
       fileName: data.fileName,
-      fileSize: data.fileSize
+      fileSize: data.fileSize,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Если сообщение адресовано ИИ Боту
+    // Общение с ИИ Ботом
     if (data.targetUid === 'bot-assistant') {
-      socket.emit('chat message', msgData); // Сообщение от пользователя
+      socket.emit('chat message', msgPayload);
       setTimeout(() => {
-        const botAnswer = {
+        const botReply = {
           id: Date.now() + 1,
           senderUid: 'bot-assistant',
           senderName: 'ИИ Помощник 🤖',
+          senderAvatar: '',
           targetUid: sender.uid,
           type: 'text',
-          content: getBotResponse(data.content)
+          content: getAdvancedBotResponse(data.content),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        socket.emit('chat message', botAnswer);
-      }, 600);
+        socket.emit('chat message', botReply);
+      }, 700);
       return;
     }
 
-    // Рассылка всем или конкретному пользователю
-    io.emit('chat message', msgData);
+    // Ищем recipient socket
+    let targetSocketId = null;
+    for (let [sId, user] of onlineUsers.entries()) {
+      if (user.uid === data.targetUid) {
+        targetSocketId = sId;
+        break;
+      }
+    }
+
+    // Отправляем себе и получателю
+    socket.emit('chat message', msgPayload);
+    if (targetSocketId && targetSocketId !== socket.id) {
+      io.to(targetSocketId).emit('chat message', msgPayload);
+    }
   });
 
-  // WebRTC Сигналинг для звонков
+  // Удаление сообщения
+  socket.on('delete message', (data) => {
+    io.emit('message deleted', { msgId: data.msgId, targetUid: data.targetUid });
+  });
+
+  // WebRTC Сигналинг звонков
   socket.on('call-user', (data) => {
-    socket.broadcast.emit('incoming-call', {
-      from: socket.id,
-      fromUid: users[socket.id]?.uid || 'Неизвестный',
-      fromName: users[socket.id]?.username || 'Путник',
-      offer: data.offer
-    });
+    for (let [sId, user] of onlineUsers.entries()) {
+      if (user.uid === data.targetUid) {
+        io.to(sId).emit('incoming-call', {
+          fromSocketId: socket.id,
+          fromUid: onlineUsers.get(socket.id)?.uid,
+          fromName: onlineUsers.get(socket.id)?.username || 'Собеседник',
+          offer: data.offer
+        });
+        break;
+      }
+    }
   });
 
   socket.on('make-answer', (data) => {
-    io.to(data.to).emit('call-answered', {
-      to: socket.id,
+    io.to(data.toSocketId).emit('call-answered', {
+      fromSocketId: socket.id,
       answer: data.answer
     });
   });
 
   socket.on('ice-candidate', (data) => {
-    socket.broadcast.emit('ice-candidate', {
-      sender: socket.id,
-      candidate: data.candidate || data
-    });
+    for (let [sId, user] of onlineUsers.entries()) {
+      if (user.uid === data.targetUid) {
+        io.to(sId).emit('ice-candidate', { candidate: data.candidate });
+      }
+    }
   });
 
-  socket.on('end-call', () => {
-    socket.broadcast.emit('call-ended');
+  socket.on('end-call', (data) => {
+    for (let [sId, user] of onlineUsers.entries()) {
+      if (user.uid === data.targetUid) {
+        io.to(sId).emit('call-ended');
+      }
+    }
   });
 
   socket.on('disconnect', () => {
-    delete users[socket.id];
+    onlineUsers.delete(socket.id);
+    broadcastOnlineStatus();
   });
+
+  function broadcastOnlineStatus() {
+    const activeUids = Array.from(onlineUsers.values()).map(u => u.uid);
+    io.emit('online-users-list', activeUids);
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Сервер Храм запущен на порту ${PORT}`);
+  console.log(`Сервер Храма запущен на порту ${PORT}`);
 });
