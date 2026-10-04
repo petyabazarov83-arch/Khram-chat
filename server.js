@@ -10,7 +10,7 @@ const io = new Server(server, {
 
 app.use(express.static('public'));
 
-// Хранилище подключенных пользователей: socket.id -> { uid, username, avatar }
+// Хранилище пользователей: socket.id -> { uid, username, avatar }
 const socketToUser = new Map();
 
 function getBotResponse(text) {
@@ -31,7 +31,6 @@ function broadcastOnlineUsers() {
 
 io.on('connection', (socket) => {
 
-  // Авторизация / Регистрация в комнате UID
   socket.on('register', (user) => {
     if (!user || !user.uid) return;
     
@@ -41,12 +40,10 @@ io.on('connection', (socket) => {
       avatar: user.avatar || ''
     });
 
-    // Присоединяем данный сокет к комнате с его UID
     socket.join(user.uid);
     broadcastOnlineUsers();
   });
 
-  // Отправка сообщений
   socket.on('chat message', (data) => {
     const sender = socketToUser.get(socket.id) || { uid: data.senderUid, username: 'Пользователь' };
 
@@ -63,7 +60,6 @@ io.on('connection', (socket) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Бот
     if (data.targetUid === 'bot-assistant') {
       socket.emit('chat message', msgPayload);
       setTimeout(() => {
@@ -80,19 +76,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Отправляем отправителю
     io.to(sender.uid).emit('chat message', msgPayload);
-    // Отправляем получателю в его комнату
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
 
-  // Удаление сообщения
   socket.on('delete message', (data) => {
     io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
     io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
   });
 
-  // WebRTC Звонки (Сигналинг через комнаты UID)
   socket.on('call-user', (data) => {
     const sender = socketToUser.get(socket.id);
     io.to(data.targetUid).emit('incoming-call', {
