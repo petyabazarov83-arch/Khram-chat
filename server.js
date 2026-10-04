@@ -10,42 +10,71 @@ const io = new Server(server, {
 
 app.use(express.static('public'));
 
-// Хранилище пользователей: socket.id -> { uid, username, avatar }
-const socketToUser = new Map();
-
-function getBotResponse(text) {
-  const q = text.toLowerCase();
-  if (q.includes('салат') || q.includes('приготовить салат')) {
-    return "🥗 **Рецепт вкусного салата:**\n1. Нарежьте 2 огурца и 2 помидора.\n2. Добавьте порезанный зеленый лук и зелень.\n3. Посолите, заправьте оливковым или подсолнечным маслом.\n4. Перемешайте — готово!";
-  }
-  if (q.includes('привет') || q.includes('хай') || q.includes('здравствуй')) {
-    return "Приветствую в Храме! Чем могу помочь?";
-  }
-  return `🤖 Ответ бота: "${text}". Задайте вопрос (например, "как приготовить салат").`;
-}
+// Хранилище зарегистрированных пользователей: uid -> { uid, username, avatar, phone, socketIds: Set }
+const registeredUsers = new Map();
+const socketToUid = new Map();
 
 function broadcastOnlineUsers() {
-  const onlineUids = Array.from(socketToUser.values()).map(u => u.uid);
+  const onlineUids = Array.from(socketToUid.values());
   io.emit('online-users-list', Array.from(new Set(onlineUids)));
 }
 
 io.on('connection', (socket) => {
 
+  // Регистрация профиля на сервере
   socket.on('register', (user) => {
     if (!user || !user.uid) return;
-    
-    socketToUser.set(socket.id, {
-      uid: user.uid,
-      username: user.username || 'Путник',
-      avatar: user.avatar || ''
-    });
+
+    socketToUid.set(socket.id, user.uid);
+
+    let userData = registeredUsers.get(user.uid) || { socketIds: new Set() };
+    userData.uid = user.uid;
+    userData.username = user.username || 'Путник';
+    userData.avatar = user.avatar || '';
+    userData.phone = user.phone ? user.phone.replace(/\D/g, '') : '';
+    userData.socketIds.add(socket.id);
+
+    registeredUsers.set(user.uid, userData);
 
     socket.join(user.uid);
     broadcastOnlineUsers();
+
+    // Рассылаем обновившийся профиль всем для синхронизации
+    io.emit('user-profile-updated', {
+      uid: userData.uid,
+      username: userData.username,
+      avatar: userData.avatar
+    });
   });
 
+  // Синхронизация контактов с SIM/телефона
+  socket.on('sync-contacts', (phoneNumbers) => {
+    if (!Array.isArray(phoneNumbers)) return;
+
+    const normalizedPhones = phoneNumbers.map(p => String(p).replace(/\D/g, '')).filter(Boolean);
+    const matchedUsers = [];
+
+    registeredUsers.forEach((u) => {
+      if (u.phone && normalizedPhones.includes(u.phone)) {
+        matchedUsers.push({
+          uid: u.uid,
+          name: u.username,
+          avatar: u.avatar,
+          phone: u.phone
+        });
+      }
+    });
+
+    socket.emit('contacts-synced', matchedUsers);
+  });
+
+  // Отправка сообщений
   socket.on('chat message', (data) => {
-    const sender = socketToUser.get(socket.id) || { uid: data.senderUid, username: 'Пользователь' };
+    const sender = registeredUsers.get(data.senderUid) || {
+      uid: data.senderUid,
+      username: 'Пользователь',
+      avatar: ''
+    };
 
     const msgPayload = {
       id: data.id || Date.now(),
@@ -60,6 +89,7 @@ io.on('connection', (socket) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    // Бот-помощник
     if (data.targetUid === 'bot-assistant') {
       socket.emit('chat message', msgPayload);
       setTimeout(() => {
@@ -69,7 +99,7 @@ io.on('connection', (socket) => {
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
           type: 'text',
-          content: getBotResponse(data.content),
+          content: `🤖 Ответ бота на: "${data.content}"`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
@@ -80,16 +110,19 @@ io.on('connection', (socket) => {
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
 
+  // Удаление сообщений
   socket.on('delete message', (data) => {
     io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
     io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
   });
 
+  // WebRTC Сигналинг звонков
   socket.on('call-user', (data) => {
-    const sender = socketToUser.get(socket.id);
+    const sender = registeredUsers.get(data.senderUid);
     io.to(data.targetUid).emit('incoming-call', {
-      fromUid: sender ? sender.uid : data.senderUid,
+      fromUid: data.senderUid,
       fromName: sender ? sender.username : 'Собеседник',
+      fromAvatar: sender ? sender.avatar : '',
       fromSocketId: socket.id,
       offer: data.offer
     });
@@ -117,7 +150,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    socketToUser.delete(socket.id);
+    const uid = socketToUid.get(socket.id);
+    if (uid && registeredUsers.has(uid)) {
+      const u = registeredUsers.get(uid);
+      u.socketIds.delete(socket.id);
+    }
+    socketToUid.delete(socket.id);
     broadcastOnlineUsers();
   });
 });
