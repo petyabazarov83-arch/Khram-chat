@@ -6,10 +6,10 @@ const io = require('socket.io')(http, {
   cors: { origin: "*" }
 });
 
-// 1. Раздаем все статические файлы из текущей папки
+// Раздача статических файлов из директории проекта
 app.use(express.static(__dirname));
 
-// 2. Главный маршрут: явно отдаем index.html при заходе на "/"
+// Маршрут для главной страницы — гарантирует отдачу index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -37,6 +37,10 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('create-group', (group) => {
+    io.emit('group-created', group);
+  });
+
   socket.on('call-user', (data) => {
     if (data.isGroup) {
       socket.to(data.targetUid).emit('incoming-call', data);
@@ -56,6 +60,13 @@ io.on('connection', (socket) => {
     if (targetSocketId) io.to(targetSocketId).emit('ice-candidate', data);
   });
 
+  socket.on('end-call', (data) => {
+    if (data.targetUid) {
+      const targetSocketId = users[data.targetUid];
+      if (targetSocketId) io.to(targetSocketId).emit('call-ended');
+    }
+  });
+
   socket.on('disconnect', () => {
     if (socket.uid) delete users[socket.uid];
     io.emit('online-users-list', Object.keys(users));
@@ -64,5 +75,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер Храм успешно запущен на порту ${PORT}`);
+  console.log(`Сервер Храм запущен на порту ${PORT}`);
 });
