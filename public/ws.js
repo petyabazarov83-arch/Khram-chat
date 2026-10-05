@@ -1,8 +1,8 @@
 self.addEventListener('push', (event) => {
     const data = event.data ? event.data.json() : {};
-    const title = data.title || 'Новое уведомление';
+    const title = data.title || 'Khram Messenger';
     const options = {
-        body: data.body || 'Вам пришло сообщение или звонок!',
+        body: data.body || 'Вам пришло новое сообщение!',
         icon: '/icon.png',
         vibrate: [200, 100, 200]
     };
