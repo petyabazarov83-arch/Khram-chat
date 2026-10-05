@@ -278,5 +278,30 @@ io.on('connection', (socket) => {
     const senderUid = socketToUid.get(socket.id);
     if (data.targetUid) {
       if (data.isGroup) {
-        socket.to(data.targetUid).emit('call-ended', {
-          fromUid:
+        socket.to(data.targetUid).emit('call-ended', { fromUid: senderUid });
+      } else {
+        io.to(data.targetUid).emit('call-ended', { fromUid: senderUid });
+      }
+    }
+  });
+
+  socket.on('disconnect', () => {
+    const uid = socketToUid.get(socket.id);
+    socketToUid.delete(socket.id);
+
+    if (uid) {
+      const userData = registeredUsers.get(uid);
+      if (userData && userData.socketIds) {
+        userData.socketIds.delete(socket.id);
+        if (userData.socketIds.size === 0) {
+          broadcastOnlineUsers();
+        }
+      }
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Сервер Храма запущен на порту ${PORT}`);
+});
