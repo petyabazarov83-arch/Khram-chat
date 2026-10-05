@@ -147,7 +147,7 @@
       </div>
       <div>
         <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
-        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов SIM/устройства">📱+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Поиск контактов">📱+</button>
       </div>
     </header>
 
@@ -297,61 +297,6 @@
       navigator.serviceWorker.register('/sw.js').then(reg => {
         swRegistration = reg;
       }).catch(err => console.log('SW reg error:', err));
-
-      navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data && event.data.action === 'accept_incoming_call') {
-          acceptCallAction();
-        }
-      });
-    }
-
-    if ('Notification' in window && Notification.permission !== 'granted') {
-      Notification.requestPermission();
-    }
-
-    function sendCallNotification(callerName, callerAvatar) {
-      if (swRegistration && Notification.permission === 'granted') {
-        swRegistration.showNotification(`Входящий звонок от ${callerName}`, {
-          body: 'Нажмите «Ответить», чтобы принять вызов',
-          icon: callerAvatar || '',
-          tag: 'incoming-call',
-          renotify: true,
-          requireInteraction: true,
-          actions: [
-            { action: 'accept_call', title: '📞 Ответить' }
-          ]
-        });
-      }
-    }
-
-    const dbReq = indexedDB.open("KhramMediaDB", 1);
-    let db = null;
-    dbReq.onupgradeneeded = e => {
-      db = e.target.result;
-      if (!db.objectStoreNames.contains("ringtones")) db.createObjectStore("ringtones");
-    };
-    dbReq.onsuccess = e => {
-      db = e.target.result;
-      loadSavedRingtone();
-    };
-
-    function saveRingtoneToDB(dataUrl) {
-      if (!db) return;
-      const tx = db.transaction("ringtones", "readwrite");
-      tx.objectStore("ringtones").put(dataUrl, "userRingtone");
-    }
-
-    function loadSavedRingtone() {
-      if (!db) return;
-      const tx = db.transaction("ringtones", "readonly");
-      const req = tx.objectStore("ringtones").get("userRingtone");
-      req.onsuccess = () => {
-        if (req.result) {
-          const ringtoneAudio = document.getElementById('custom-ringtone');
-          ringtoneAudio.src = req.result;
-          document.getElementById('ringtone-status').textContent = '🎵 Выбранный рингтон сохранён';
-        }
-      };
     }
 
     let myProfile = {
@@ -366,27 +311,6 @@
     document.getElementById('username-input').value = myProfile.username;
     document.getElementById('phone-input').value = myProfile.phone;
 
-    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
-    if (savedTheme === 'light') document.body.classList.add('light-theme');
-    document.getElementById('theme-select').value = savedTheme;
-
-    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
-    document.documentElement.style.setProperty('--brand-color', savedBrandColor);
-    document.getElementById('brand-color-select').value = savedBrandColor;
-
-    document.getElementById('theme-select').addEventListener('change', (e) => {
-      const theme = e.target.value;
-      localStorage.setItem('khram_theme', theme);
-      if (theme === 'light') document.body.classList.add('light-theme');
-      else document.body.classList.remove('light-theme');
-    });
-
-    document.getElementById('brand-color-select').addEventListener('change', (e) => {
-      const color = e.target.value;
-      localStorage.setItem('khram_brand_color', color);
-      document.documentElement.style.setProperty('--brand-color', color);
-    });
-
     function updateMyAvatarDisplay() {
       if (myProfile.avatar) {
         document.getElementById('avatar-display').innerHTML = `<img src="${myProfile.avatar}" style="width:100%;height:100%;object-fit:cover;">`;
@@ -394,17 +318,21 @@
     }
     updateMyAvatarDisplay();
 
+    // Регистрируем профиль сразу при подключении
     socket.on('connect', () => {
       socket.emit('register', myProfile);
     });
 
     function saveProfile() {
       myProfile.username = document.getElementById('username-input').value.trim() || 'Путник';
-      myProfile.phone = document.getElementById('phone-input').value.trim().replace(/\D/g, '');
+      myProfile.phone = document.getElementById('phone-input').value.trim();
+      
       localStorage.setItem('khram_username', myProfile.username);
       localStorage.setItem('khram_phone', myProfile.phone);
+      
+      // Сразу перерегистрируем профиль на сервере
       socket.emit('register', myProfile);
-      alert('Профиль сохранен!');
+      alert('Профиль и номер сохранены!');
     }
     document.getElementById('save-profile-btn').addEventListener('click', saveProfile);
 
@@ -423,35 +351,32 @@
     });
 
     // ==========================================
-    // ИСПРАВЛЕННАЯ СИНХРОНИЗАЦИЯ КОНТАКТОВ С СИМ/УСТРОЙСТВА
+    // ПОИСК ПОЛЬЗОВАТЕЛЕЙ
     // ==========================================
     document.getElementById('sync-sim-btn').addEventListener('click', async () => {
       let extractedPhones = [];
 
-      // 1. Попытка запросить контакты напрямую из мобильного браузера (Contact Picker API)
+      // 1. Попытка запросить контакты с SIM/телефона через Contact Picker API
       if ('contacts' in navigator && 'ContactsManager' in window) {
         try {
           const props = ['tel'];
           const selectedContacts = await navigator.contacts.select(props, { multiple: true });
           selectedContacts.forEach(c => {
-            if (c.tel) {
-              c.tel.forEach(t => extractedPhones.push(t));
-            }
+            if (c.tel) c.tel.forEach(t => extractedPhones.push(t));
           });
         } catch (err) {
-          console.log('Чтение контактов отменено или временно недоступно:', err);
+          console.log('Отмена вызова списка контактов');
         }
       }
 
-      // 2. Если API не вернул контактов, спрашиваем способ ввода
+      // 2. Если API недоступно или список пуст — ручной ввод/загрузка VCF
       if (extractedPhones.length === 0) {
-        const option = confirm("Нажмите 'ОК', чтобы выбрать файл экспорта контактов (.vcf с SIM-карты), или 'Отмена', чтобы ввести номера вручную.");
-        
+        const option = confirm("Нажмите 'ОК', чтобы выбрать файл контактов (.vcf), или 'Отмена', чтобы ввести номер вручную.");
         if (option) {
           document.getElementById('vcf-file-input').click();
           return;
         } else {
-          const input = prompt('Введите номера телефонов для поиска через запятую:');
+          const input = prompt('Введите номер телефона для поиска:');
           if (input) {
             extractedPhones = input.split(',').map(p => p.trim());
           }
@@ -463,7 +388,6 @@
       }
     });
 
-    // Обработчик импорта .vcf файла экспорта телефонной книги
     document.getElementById('vcf-file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -477,24 +401,22 @@
         if (foundPhones.length > 0) {
           socket.emit('sync-contacts', foundPhones);
         } else {
-          alert('В выбранном VCF-файле не найдено номеров телефонов.');
+          alert('В VCF-файле не найдено номеров.');
         }
       };
       reader.readAsText(file);
     });
 
-    // Принятие найденных контактов и АВТОМАТИЧЕСКОЕ создание чатов
+    // Когда сервер присылает совпавшие контакты:
     socket.on('contacts-synced', (foundContacts) => {
       let newCount = 0;
       foundContacts.forEach(fc => {
         if (fc.uid !== myProfile.uid) {
           const existingIdx = contacts.findIndex(c => c.uid === fc.uid);
           if (existingIdx !== -1) {
-            // Обновляем существующий контакт
             contacts[existingIdx].name = fc.name;
             contacts[existingIdx].avatar = fc.avatar;
           } else {
-            // Добавляем новый контакт и создаем с ним чат
             contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
             newCount++;
           }
@@ -505,72 +427,13 @@
       renderContacts();
 
       if (newCount > 0) {
-        alert(`🎉 Найдено и добавлено новых пользователей: ${newCount}! ЧАТЫ С НИМИ ДОБАВЛЕНЫ В СПИСОК.`);
+        alert(`🎉 Найдено новых пользователей: ${newCount}! Чат с ними появился на главной странице.`);
       } else if (foundContacts.length > 0) {
-        alert('Все найденные по этим номерам пользователи уже находятся у вас в чатах!');
+        alert('Найденный пользователь уже добавлен в ваши чаты.');
       } else {
-        alert('Пользователи с такими номерами еще не зарегистрированы в Храме.');
+        alert('Пользователь с таким номером еще не зарегистрирован или не сохранил номер в своем профиле.');
       }
     });
-
-    const ringtoneAudio = document.getElementById('custom-ringtone');
-    let audioCtx = null, synthInterval = null;
-
-    function playSystemRingtone() {
-      if (ringtoneAudio.src) {
-        ringtoneAudio.currentTime = 0;
-        ringtoneAudio.play().catch(e => console.log('Ошибка рингтона:', e));
-        return;
-      }
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      
-      function pulse() {
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.8);
-      }
-      pulse();
-      synthInterval = setInterval(pulse, 1600);
-    }
-
-    function stopSystemRingtone() {
-      if (ringtoneAudio.src) {
-        ringtoneAudio.pause();
-        ringtoneAudio.currentTime = 0;
-      }
-      if (synthInterval) clearInterval(synthInterval);
-    }
-
-    document.getElementById('ringtone-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          saveRingtoneToDB(evt.target.result);
-          ringtoneAudio.src = evt.target.result;
-          document.getElementById('ringtone-status').textContent = '🎵 Рингтон сохранен!';
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    function switchTab(pageId, targetBtn) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(pageId).classList.add('active');
-      if (targetBtn) targetBtn.classList.add('active');
-    }
-
-    document.getElementById('tab-btn-chats').addEventListener('click', (e) => switchTab('chats-page', e.target));
-    document.getElementById('tab-btn-profile').addEventListener('click', (e) => switchTab('profile-page', e.target));
-    document.getElementById('tab-btn-settings').addEventListener('click', (e) => switchTab('settings-page', e.target));
 
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
     let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
@@ -620,12 +483,22 @@
       });
     }
 
+    function switchTab(pageId, targetBtn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+      if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    document.getElementById('tab-btn-chats').addEventListener('click', (e) => switchTab('chats-page', e.target));
+    document.getElementById('tab-btn-profile').addEventListener('click', (e) => switchTab('profile-page', e.target));
+    document.getElementById('tab-btn-settings').addEventListener('click', (e) => switchTab('settings-page', e.target));
+
     function requestDeleteChat(chatId, isGroup, event) {
       if (event) event.stopPropagation();
-
-      if (confirm('Вы уверены, что хотите удалить этот чат и его историю?')) {
+      if (confirm('Вы уверены, что хотите удалить этот чат?')) {
         socket.emit('delete-chat', { chatId, isGroup, userUid: myProfile.uid });
-        localStorage.removeItem(getHistoryKey(chatId));
+        localStorage.removeItem(`chat_history_${myProfile.uid}_${chatId}`);
 
         if (isGroup) {
           myGroups = myGroups.filter(g => g.id !== chatId);
@@ -635,23 +508,17 @@
           localStorage.setItem('khram_contacts', JSON.stringify(contacts));
         }
 
-        if (currentChatUid === chatId) {
-          closeChat();
-        }
-
+        if (currentChatUid === chatId) closeChat();
         renderContacts();
       }
     }
 
     document.getElementById('delete-chat-btn').addEventListener('click', () => {
-      if (currentChatUid) {
-        requestDeleteChat(currentChatUid, isCurrentGroup);
-      }
+      if (currentChatUid) requestDeleteChat(currentChatUid, isCurrentGroup);
     });
 
     socket.on('chat-deleted', (data) => {
-      localStorage.removeItem(getHistoryKey(data.chatId));
-
+      localStorage.removeItem(`chat_history_${myProfile.uid}_${data.chatId}`);
       if (data.isGroup) {
         myGroups = myGroups.filter(g => g.id !== data.chatId);
         localStorage.setItem('khram_groups', JSON.stringify(myGroups));
@@ -659,37 +526,11 @@
         contacts = contacts.filter(c => c.uid !== data.chatId);
         localStorage.setItem('khram_contacts', JSON.stringify(contacts));
       }
-
-      if (currentChatUid === data.chatId) {
-        closeChat();
-      }
-
+      if (currentChatUid === data.chatId) closeChat();
       renderContacts();
     });
 
     document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', '', false));
-
-    document.getElementById('create-group-btn').addEventListener('click', () => {
-      const groupName = prompt('Введите название группы:');
-      if (!groupName) return;
-
-      const selectedUids = [];
-      contacts.forEach(c => {
-        if (confirm(`Добавить ${c.name} в группу?`)) {
-          selectedUids.push(c.uid);
-        }
-      });
-
-      socket.emit('create-group', { name: groupName, members: selectedUids, ownerUid: myProfile.uid });
-    });
-
-    socket.on('group-created', (groupData) => {
-      if (!myGroups.some(g => g.id === groupData.id)) {
-        myGroups.push(groupData);
-        localStorage.setItem('khram_groups', JSON.stringify(myGroups));
-        renderContacts();
-      }
-    });
 
     let currentChatUid = '', isCurrentGroup = false;
 
@@ -704,7 +545,6 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('chat-window-modal').classList.add('active');
 
-      applyChatBackground();
       updateActiveChatStatus();
       loadHistory();
     }
@@ -717,59 +557,16 @@
     }
     document.getElementById('close-chat-btn').addEventListener('click', closeChat);
 
-    document.getElementById('bg-settings-btn').addEventListener('click', () => {
-      if (isCurrentGroup) {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*';
-        fileInput.onchange = (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              const bgUrl = evt.target.result;
-              socket.emit('update-group-bg', { groupId: currentChatUid, bgImage: bgUrl, userUid: myProfile.uid });
-            };
-            reader.readAsDataURL(file);
-          }
-        };
-        fileInput.click();
-      } else {
-        const choice = prompt('Выберите фон (1, 2, 3, 4):');
-        if (['1','2','3','4'].includes(choice)) {
-          localStorage.setItem(`bg_chat_${currentChatUid}`, `bg-preset-${choice}`);
-          applyChatBackground();
-        }
-      }
-    });
-
-    function applyChatBackground() {
-      const msgBox = document.getElementById('messages');
-      msgBox.style.backgroundImage = '';
-      msgBox.className = '';
-
-      if (isCurrentGroup) {
-        const g = myGroups.find(group => group.id === currentChatUid);
-        if (g && g.bgImage) msgBox.style.backgroundImage = `url(${g.bgImage})`;
-      } else {
-        const preset = localStorage.getItem(`bg_chat_${currentChatUid}`);
-        if (preset) msgBox.classList.add(preset);
-      }
-    }
-
     function updateActiveChatStatus() {
       if (!currentChatUid) return;
       const statusEl = document.getElementById('active-chat-status');
       if (isCurrentGroup) {
         statusEl.textContent = 'Групповой чат';
-        statusEl.style.color = 'var(--brand-color)';
       } else if (currentChatUid === 'bot-assistant') {
         statusEl.textContent = '🟢 Онлайн';
-        statusEl.style.color = '#22c55e';
       } else {
         const isOnline = activeOnlineUids.includes(currentChatUid);
         statusEl.textContent = isOnline ? '🟢 Онлайн' : '⚪ Офлайн';
-        statusEl.style.color = isOnline ? '#22c55e' : 'var(--text-muted)';
       }
     }
 
@@ -798,8 +595,7 @@
 
     function renderMessageUI(data) {
       if (!data) return;
-      const existingMsg = document.getElementById(`msg-${data.id}`);
-      if (existingMsg) return;
+      if (document.getElementById(`msg-${data.id}`)) return;
 
       const isMine = data.senderUid === myProfile.uid;
       const div = document.createElement('div');
@@ -834,17 +630,12 @@
         const video = document.createElement('video');
         video.src = data.content;
         video.controls = true;
-        video.autoplay = true;
-        video.loop = true;
-        video.muted = true;
-        video.playsInline = true;
         video.className = 'video-circle';
         contentBox.appendChild(video);
       } else if (data.type === 'file') {
         const a = document.createElement('a');
         a.href = data.content;
         a.download = data.fileName || 'файл';
-        a.style.color = 'var(--brand-color)';
         a.textContent = `📁 ${data.fileName || 'Скачать файл'}`;
         contentBox.appendChild(a);
       }
@@ -890,266 +681,6 @@
     }
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
-
-    document.getElementById('file-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file || !currentChatUid) return;
-
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const isImg = file.type.startsWith('image/');
-        socket.emit('chat message', {
-          senderUid: myProfile.uid,
-          targetUid: currentChatUid,
-          isGroup: isCurrentGroup,
-          type: isImg ? 'image' : 'file',
-          content: evt.target.result,
-          fileName: file.name,
-          fileSize: file.size
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-
-    let audioRecorder, audioChunks = [], isAudioRecording = false;
-    const recAudioBtn = document.getElementById('record-audio-btn');
-
-    recAudioBtn.addEventListener('click', async () => {
-      if (!currentChatUid) return alert('Выберите чат');
-
-      if (!isAudioRecording) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audioRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-
-          audioRecorder.ondataavailable = e => audioChunks.push(e.data);
-          audioRecorder.onstop = () => {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              socket.emit('chat message', {
-                senderUid: myProfile.uid,
-                targetUid: currentChatUid,
-                isGroup: isCurrentGroup,
-                type: 'audio',
-                content: evt.target.result
-              });
-            };
-            reader.readAsDataURL(blob);
-            stream.getTracks().forEach(t => t.stop());
-          };
-
-          audioRecorder.start();
-          isAudioRecording = true;
-          recAudioBtn.classList.add('active-rec');
-        } catch(e) { alert('Ошибка доступа к микрофону'); }
-      } else {
-        audioRecorder.stop();
-        isAudioRecording = false;
-        recAudioBtn.classList.remove('active-rec');
-      }
-    });
-
-    let circleStream, circleRecorder, circleChunks = [];
-    const recordModal = document.getElementById('record-modal');
-    const circlePreview = document.getElementById('circle-preview');
-
-    document.getElementById('record-circle-btn').addEventListener('click', async () => {
-      if (!currentChatUid) return alert('Выберите чат');
-      try {
-        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-        circlePreview.srcObject = circleStream;
-        recordModal.style.display = 'flex';
-
-        circleChunks = [];
-        circleRecorder = new MediaRecorder(circleStream);
-        circleRecorder.ondataavailable = e => circleChunks.push(e.data);
-        circleRecorder.start();
-      } catch(e) { alert('Ошибка доступа к камере'); }
-    });
-
-    document.getElementById('stop-record-btn').addEventListener('click', () => {
-      if (circleRecorder && circleRecorder.state !== 'inactive') {
-        circleRecorder.onstop = () => {
-          const blob = new Blob(circleChunks, { type: 'video/webm' });
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            socket.emit('chat message', {
-              senderUid: myProfile.uid,
-              targetUid: currentChatUid,
-              isGroup: isCurrentGroup,
-              type: 'circle',
-              content: evt.target.result
-            });
-          };
-          reader.readAsDataURL(blob);
-          if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-        };
-        circleRecorder.stop();
-      }
-      recordModal.style.display = 'none';
-    });
-
-    document.getElementById('cancel-record-btn').addEventListener('click', () => {
-      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-      recordModal.style.display = 'none';
-    });
-
-    let peerConnection, localStream;
-    let currentFacingMode = 'user';
-    const callModal = document.getElementById('call-modal');
-    const remoteVideo = document.getElementById('remote-video');
-    const localVideo = document.getElementById('local-video');
-    const acceptCallBtn = document.getElementById('accept-call-btn');
-    const toggleMicBtn = document.getElementById('toggle-mic-btn');
-    const toggleCamBtn = document.getElementById('toggle-cam-btn');
-    const switchCamBtn = document.getElementById('switch-cam-btn');
-
-    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-    async function setupCallMedia(facing = 'user') {
-      if (localStream) localStream.getTracks().forEach(t => t.stop());
-      localStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: facing }, 
-        audio: true 
-      });
-      localVideo.srcObject = localStream;
-      currentFacingMode = facing;
-      
-      toggleMicBtn.classList.remove('off');
-      toggleCamBtn.classList.remove('off');
-    }
-
-    toggleMicBtn.addEventListener('click', () => {
-      if (localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = !audioTrack.enabled;
-          toggleMicBtn.classList.toggle('off', !audioTrack.enabled);
-        }
-      }
-    });
-
-    toggleCamBtn.addEventListener('click', () => {
-      if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.enabled = !videoTrack.enabled;
-          toggleCamBtn.classList.toggle('off', !videoTrack.enabled);
-        }
-      }
-    });
-
-    switchCamBtn.addEventListener('click', async () => {
-      const newFacing = (currentFacingMode === 'user') ? 'environment' : 'user';
-      await setupCallMedia(newFacing);
-      if (peerConnection) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender && videoTrack) {
-          sender.replaceTrack(videoTrack);
-        }
-      }
-    });
-
-    function startCallTimeout() {
-      clearTimeout(callTimeoutTimer);
-      callTimeoutTimer = setTimeout(() => {
-        alert('Собеседник не ответил (Время ожидания истекло - 45 сек)');
-        socket.emit('end-call', { targetUid: currentChatUid, reason: 'timeout' });
-        closeCall();
-      }, 45000);
-    }
-
-    document.getElementById('start-call-btn').addEventListener('click', async () => {
-      if (!currentChatUid) return;
-      callModal.style.display = 'flex';
-      await setupCallMedia('user');
-
-      peerConnection = new RTCPeerConnection(rtcConfig);
-      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
-
-      peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
-      
-      peerConnection.onicecandidate = e => { 
-        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate }); 
-      };
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer, isGroup: isCurrentGroup });
-
-      startCallTimeout();
-    });
-
-    socket.on('incoming-call', async (data) => {
-      document.getElementById('call-username').textContent = data.fromName || 'Входящий звонок';
-      callModal.style.display = 'flex';
-      acceptCallBtn.style.display = 'flex';
-
-      playSystemRingtone();
-      sendCallNotification(data.fromName || 'Собеседник', data.fromAvatar);
-
-      window.incomingOffer = data.offer;
-      window.callerUid = data.fromUid;
-      startCallTimeout();
-    });
-
-    async function acceptCallAction() {
-      clearTimeout(callTimeoutTimer);
-      stopSystemRingtone();
-      acceptCallBtn.style.display = 'none';
-      await setupCallMedia('user');
-
-      peerConnection = new RTCPeerConnection(rtcConfig);
-      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
-
-      peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
-      
-      peerConnection.onicecandidate = e => { 
-        if (e.candidate) socket.emit('ice-candidate', { targetUid: window.callerUid, candidate: e.candidate }); 
-      };
-
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      socket.emit('make-answer', { targetUid: window.callerUid, answer });
-    }
-
-    acceptCallBtn.addEventListener('click', acceptCallAction);
-
-    socket.on('call-answered', async (data) => {
-      clearTimeout(callTimeoutTimer);
-      if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-      }
-    });
-
-    socket.on('ice-candidate', async (data) => {
-      if (peerConnection && data.candidate) {
-        try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e){}
-      }
-    });
-
-    function closeCall() {
-      clearTimeout(callTimeoutTimer);
-      stopSystemRingtone();
-      if (peerConnection) { peerConnection.close(); peerConnection = null; }
-      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-      remoteVideo.srcObject = null;
-      localVideo.srcObject = null;
-      callModal.style.display = 'none';
-      acceptCallBtn.style.display = 'none';
-    }
-
-    document.getElementById('end-call-btn').addEventListener('click', () => {
-      socket.emit('end-call', { targetUid: currentChatUid || window.callerUid });
-      closeCall();
-    });
-
-    socket.on('call-ended', closeCall);
 
     socket.on('online-users-list', (uids) => {
       activeOnlineUids = uids;
