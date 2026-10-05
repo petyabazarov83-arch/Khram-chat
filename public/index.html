@@ -170,7 +170,7 @@
       </div>
       <div style="display:flex; gap:6px;">
         <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
-        <button class="btn-icon" id="sync-sim-btn" title="Поиск контактов">📱+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Поиск контактов VCF">📱+</button>
       </div>
     </header>
 
@@ -281,7 +281,7 @@
   </div>
 
   <div id="circle-modal" onclick="closeCircleModal()">
-    <video id="circle-modal-video" autoplay playsinline></video>
+    <video id="circle-modal-video" autoplay playsinline loop></video>
   </div>
 
   <div id="group-modal" class="modal">
@@ -343,14 +343,7 @@
   <script>
     const socket = io();
 
-    // Разблокировка AudioContext для мобильных браузеров
-    document.body.addEventListener('click', () => {
-      if (customRingtoneAudio && customRingtoneAudio.paused && ringtoneLoaded) {
-        customRingtoneAudio.load();
-      }
-    }, { once: true });
-
-    // WebRTC Конфигурация с STUN/TURN серверами для работы через ЛЮБОЙ интернет (Мобильный / Другой Wi-Fi)
+    // STUN/TURN серверы для стабильных звонков через ЛЮБОЙ интернет и Wi-Fi
     const rtcConfig = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -405,7 +398,7 @@
       }
     });
 
-    // INDEXEDDB ДЛЯ РИНГТОНА (До 46 МБ)
+    // РИНГТОН В INDEXEDDB (до 46 МБ)
     let db = null;
     const request = indexedDB.open("KhramMediaDB", 1);
     request.onupgradeneeded = (e) => {
@@ -431,7 +424,7 @@
       store.put(fileName, "custom_ringtone_name");
       tx.oncomplete = () => {
         loadRingtoneFromDB();
-        alert("Рингтон успешно сохранен!");
+        alert("Рингтон сохранен!");
       };
     }
 
@@ -466,13 +459,10 @@
     document.getElementById("ringtone-input").addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
-      const maxSize = 46 * 1024 * 1024;
-      if (file.size > maxSize) {
+      if (file.size > 46 * 1024 * 1024) {
         alert("Размер рингтона превышает 46 МБ!");
         return;
       }
-
       saveRingtoneToDB(file, file.name);
     });
 
@@ -482,7 +472,7 @@
           alert("Кастомный рингтон не установлен.");
           return;
         }
-        customRingtoneAudio.play().catch(e => alert("Ошибка воспроизведения: нажмите на экран"));
+        customRingtoneAudio.play().catch(e => alert("Нажмите на экран для воспроизведения"));
         document.getElementById("play-ringtone-btn").textContent = "⏸ Пауза";
       } else {
         customRingtoneAudio.pause();
@@ -521,20 +511,14 @@
       }
     }
 
-    // ТЕМЫ
+    // ТЕМЫ И СТИЛИ
     const themeSelect = document.getElementById('theme-select');
     const brandColorSelect = document.getElementById('brand-color-select');
     const brandTitle = document.getElementById('brand-title');
 
-    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
-    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
-
     function applyTheme(theme) {
-      if (theme === 'light') {
-        document.body.classList.add('light-theme');
-      } else {
-        document.body.classList.remove('light-theme');
-      }
+      if (theme === 'light') document.body.classList.add('light-theme');
+      else document.body.classList.remove('light-theme');
       themeSelect.value = theme;
       localStorage.setItem('khram_theme', theme);
     }
@@ -546,13 +530,13 @@
       localStorage.setItem('khram_brand_color', color);
     }
 
-    applyTheme(savedTheme);
-    applyBrandColor(savedBrandColor);
+    applyTheme(localStorage.getItem('khram_theme') || 'dark');
+    applyBrandColor(localStorage.getItem('khram_brand_color') || '#f59e0b');
 
     themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
-    // СПИСОК ЧАТОВ И ГРУПП
+    // СПИСОК КОНТАКТОВ И ГРУПП
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
     let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
     let activeOnlineUids = [];
@@ -590,7 +574,7 @@
       });
     }
 
-    // ЧАТИРОВАНИЕ И ФОН
+    // ЧАТ, ФОН, ИСТОРИЯ
     let currentChatUid = '', isCurrentGroup = false;
 
     function openChat(uid, title, avatar, isGroup = false) {
@@ -636,8 +620,7 @@
       if (file && currentChatUid) {
         const reader = new FileReader();
         reader.onload = (evt) => {
-          const bgData = evt.target.result;
-          localStorage.setItem(`chat_bg_${currentChatUid}`, bgData);
+          localStorage.setItem(`chat_bg_${currentChatUid}`, evt.target.result);
           applyChatBackground();
           bgModal.classList.remove('active');
         };
@@ -653,7 +636,6 @@
       }
     });
 
-    // СООБЩЕНИЯ И ФАЙЛЫ
     function getHistoryKey(uid) { return `chat_history_${myProfile.uid}_${uid}`; }
 
     function loadHistory() {
@@ -709,23 +691,42 @@
     const input = document.getElementById('input');
     function sendText() {
       const text = input.value.trim();
-      if (text && currentChatUid) {
-        socket.emit('chat message', {
-          id: Date.now() + Math.random().toString(36).substring(2, 5),
-          senderUid: myProfile.uid,
-          senderName: myProfile.username,
-          targetUid: currentChatUid,
-          isGroup: isCurrentGroup,
-          type: 'text',
-          content: text
-        });
+      if (!text || !currentChatUid) return;
+
+      if (currentChatUid === 'bot') {
+        const userMsg = { id: Date.now(), senderUid: myProfile.uid, senderName: 'Вы', targetUid: 'bot', type: 'text', content: text };
+        saveMessageToHistory(userMsg);
+        renderMessageUI(userMsg);
         input.value = '';
+
+        setTimeout(() => {
+          const botReply = { id: Date.now() + 1, senderUid: 'bot', senderName: 'ИИ Помощник 🤖', targetUid: myProfile.uid, type: 'text', content: 'Привет! Я виртуальный помощник Храма. Рад помочь с тестированием мессенджера!' };
+          saveMessageToHistory(botReply);
+          renderMessageUI(botReply);
+        }, 800);
+        return;
       }
+
+      socket.emit('chat message', {
+        id: Date.now() + Math.random().toString(36).substring(2, 5),
+        senderUid: myProfile.uid,
+        senderName: myProfile.username,
+        targetUid: currentChatUid,
+        isGroup: isCurrentGroup,
+        type: 'text',
+        content: text
+      });
+      input.value = '';
     }
 
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
+    document.getElementById('bot-chat-item').addEventListener('click', () => {
+      openChat('bot', 'ИИ Помощник 🤖', '', false);
+    });
+
+    // ОТПРАВКА ФАЙЛОВ
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file && currentChatUid) {
@@ -746,7 +747,135 @@
       }
     });
 
-    // ГРУППЫ
+    // ГОЛОСОВЫЕ СООБЩЕНИЯ
+    let mediaRecorder = null, audioChunks = [], isRecordingAudio = false;
+    const recAudioBtn = document.getElementById('record-audio-btn');
+
+    recAudioBtn.addEventListener('click', async () => {
+      if (!isRecordingAudio) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              socket.emit('chat message', {
+                id: Date.now() + Math.random().toString(36).substring(2, 5),
+                senderUid: myProfile.uid,
+                senderName: myProfile.username,
+                targetUid: currentChatUid,
+                isGroup: isCurrentGroup,
+                type: 'audio',
+                content: evt.target.result
+              });
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach(t => t.stop());
+          };
+          mediaRecorder.start();
+          isRecordingAudio = true;
+          recAudioBtn.classList.add('active-rec');
+        } catch (err) { alert('Микрофон недоступен!'); }
+      } else {
+        mediaRecorder.stop();
+        isRecordingAudio = false;
+        recAudioBtn.classList.remove('active-rec');
+      }
+    });
+
+    // ВИДЕОКРУЖОЧКИ
+    let circleRecorder = null, circleChunks = [], circleStream = null;
+    const recordModal = document.getElementById('record-modal');
+    const circlePreview = document.getElementById('circle-preview');
+
+    document.getElementById('record-circle-btn').addEventListener('click', async () => {
+      try {
+        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        circlePreview.srcObject = circleStream;
+        recordModal.classList.add('active');
+
+        circleRecorder = new MediaRecorder(circleStream);
+        circleChunks = [];
+        circleRecorder.ondataavailable = e => circleChunks.push(e.data);
+        circleRecorder.start();
+      } catch (err) { alert('Камера или микрофон недоступны!'); }
+    });
+
+    document.getElementById('cancel-record-btn').addEventListener('click', () => {
+      if (circleRecorder) circleRecorder.stop();
+      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+      recordModal.classList.remove('active');
+    });
+
+    document.getElementById('stop-record-btn').addEventListener('click', () => {
+      circleRecorder.onstop = () => {
+        const blob = new Blob(circleChunks, { type: 'video/webm' });
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          socket.emit('chat message', {
+            id: Date.now() + Math.random().toString(36).substring(2, 5),
+            senderUid: myProfile.uid,
+            senderName: myProfile.username,
+            targetUid: currentChatUid,
+            isGroup: isCurrentGroup,
+            type: 'circle',
+            content: evt.target.result
+          });
+        };
+        reader.readAsDataURL(blob);
+      };
+      circleRecorder.stop();
+      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+      recordModal.classList.remove('active');
+    });
+
+    function playCircleModal(src) {
+      const modal = document.getElementById('circle-modal');
+      const video = document.getElementById('circle-modal-video');
+      video.src = src;
+      modal.classList.add('active');
+      video.play();
+    }
+
+    function closeCircleModal() {
+      const modal = document.getElementById('circle-modal');
+      const video = document.getElementById('circle-modal-video');
+      video.pause();
+      modal.classList.remove('active');
+    }
+
+    // ИМПОРТ VCF
+    document.getElementById('sync-sim-btn').addEventListener('click', () => {
+      document.getElementById('vcf-file-input').click();
+    });
+
+    document.getElementById('vcf-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target.result;
+        const lines = text.split('\n');
+        let name = '', phone = '';
+        lines.forEach(line => {
+          if (line.startsWith('FN:')) name = line.replace('FN:', '').trim();
+          if (line.startsWith('TEL:')) phone = line.replace('TEL:', '').trim();
+        });
+        if (name) {
+          const newContact = { uid: 'uid-' + Math.random().toString(36).substring(2, 8), name, phone, avatar: '' };
+          contacts.push(newContact);
+          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+          renderContacts();
+          alert(`Контакт ${name} добавлен!`);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // ГРУППОВЫЕ ЧАТЫ
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
       const listDiv = document.getElementById('group-members-list');
@@ -782,10 +911,8 @@
       }
     });
 
-    // ЗВОНКИ (ОДНОНОЧНЫЕ И ГРУППОВЫЕ ДЛЯ ЛЮБОГО ИНТЕРНЕТА)
-    let peerConnection = null;
-    let localStream = null;
-    let currentFacingMode = 'user';
+    // ЗВОНКИ
+    let peerConnection = null, localStream = null, currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
     const localVideo = document.getElementById('local-video');
     const remoteVideo = document.getElementById('remote-video');
@@ -795,7 +922,7 @@
       callModal.classList.add('active');
       document.getElementById('call-username').textContent = isCurrentGroup ? 'Групповой звонок...' : 'Звоним...';
 
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
       localVideo.srcObject = localStream;
 
       peerConnection = new RTCPeerConnection(rtcConfig);
@@ -821,7 +948,7 @@
       document.getElementById('accept-call-btn').onclick = async () => {
         stopCallSound();
         document.getElementById('accept-call-btn').style.display = 'none';
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
         localVideo.srcObject = localStream;
 
         peerConnection = new RTCPeerConnection(rtcConfig);
@@ -849,6 +976,40 @@
       if (peerConnection && data.candidate) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
     });
 
+    document.getElementById('toggle-mic-btn').addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          document.getElementById('toggle-mic-btn').classList.toggle('off', !audioTrack.enabled);
+        }
+      }
+    });
+
+    document.getElementById('toggle-cam-btn').addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          document.getElementById('toggle-cam-btn').classList.toggle('off', !videoTrack.enabled);
+        }
+      }
+    });
+
+    document.getElementById('switch-cam-btn').addEventListener('click', async () => {
+      if (localStream) {
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
+        localVideo.srcObject = localStream;
+        if (peerConnection) {
+          const videoTrack = localStream.getVideoTracks()[0];
+          const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+          if (sender) sender.replaceTrack(videoTrack);
+        }
+      }
+    });
+
     document.getElementById('end-call-btn').addEventListener('click', endCall);
     socket.on('call-ended', endCall);
 
@@ -862,6 +1023,7 @@
       socket.emit('end-call', { targetUid: currentChatUid });
     }
 
+    // ВКЛАДКИ
     function switchTab(pageId, targetBtn) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -881,4 +1043,4 @@
     renderContacts();
   </script>
 </body>
-  </html>
+               </html>
