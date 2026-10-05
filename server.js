@@ -10,7 +10,7 @@ app.use(express.json({ limit: '70gb' }));
 app.use(express.urlencoded({ limit: '70gb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 1e9, // 1 ГБ для сокетов
+  maxHttpBufferSize: 1e9, // Максимальный размер буфера сокетов для медиафайлов
   cors: { origin: "*" }
 });
 
@@ -41,7 +41,6 @@ io.on('connection', (socket) => {
 
     registeredUsers.set(user.uid, userData);
     
-    // Подключаем сокет к комнате с его собственным UID
     socket.join(user.uid);
 
     groups.forEach((g) => {
@@ -144,27 +143,31 @@ io.on('connection', (socket) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    // Групповой чат
     if (data.isGroup) {
       io.to(data.targetUid).emit('chat message', msgPayload);
       return;
     }
 
+    // Сообщение ИИ БОТУ
     if (data.targetUid === 'bot-assistant') {
       socket.emit('chat message', msgPayload);
       setTimeout(() => {
         socket.emit('chat message', {
-          id: Date.now() + 1,
+          id: Date.now() + Math.random(),
           senderUid: 'bot-assistant',
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
+          isGroup: false,
           type: 'text',
-          content: `🤖 Получил ваше сообщение: "${data.content || '['+data.type+']'}"`,
+          content: `🤖 Получил ваше сообщение: "${data.content || '[' + data.type + ']'}"`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
       return;
     }
 
+    // Личное сообщение между пользователями
     io.to(sender.uid).emit('chat message', msgPayload);
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
@@ -178,7 +181,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ИСПРАВЛЕНИЯ ЗВОНКОВ WEBRTC:
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
@@ -186,6 +188,7 @@ io.on('connection', (socket) => {
         fromUid: data.senderUid,
         fromName: sender ? sender.username : 'Собеседник',
         fromAvatar: sender ? sender.avatar : '',
+        fromSocketId: socket.id,
         offer: data.offer,
         isGroup: true,
         groupId: data.targetUid
@@ -195,6 +198,7 @@ io.on('connection', (socket) => {
         fromUid: data.senderUid,
         fromName: sender ? sender.username : 'Собеседник',
         fromAvatar: sender ? sender.avatar : '',
+        fromSocketId: socket.id,
         offer: data.offer,
         isGroup: false
       });
@@ -202,18 +206,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('make-answer', (data) => {
-    // Отправляем ответ прямо в комнату адресата по UID
-    if (data.targetUid) {
-      io.to(data.targetUid).emit('call-answered', {
-        answer: data.answer,
-        fromUid: socketToUid.get(socket.id)
-      });
-    }
+    io.to(data.toSocketId).emit('call-answered', {
+      answer: data.answer,
+      fromSocketId: socket.id
+    });
   });
 
   socket.on('ice-candidate', (data) => {
-    if (data.targetUid) {
-      io.to(data.targetUid).emit('ice-candidate', { candidate: data.candidate });
+    if (data.toSocketId) {
+      io.to(data.toSocketId).emit('ice-candidate', { candidate: data.candidate });
+    } else if (data.targetUid) {
+      socket.to(data.targetUid).emit('ice-candidate', { candidate: data.candidate });
     }
   });
 
