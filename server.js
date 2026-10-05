@@ -5,9 +5,12 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Увеличиваем размер буфера до 100 МБ для передачи медиафайлов
+// Поддержка передачи гигантских файлов и медиаданных
+app.use(express.json({ limit: '70gb' }));
+app.use(express.urlencoded({ limit: '70gb', extended: true }));
+
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8,
+  maxHttpBufferSize: 1e9, // Максимальный размер буфера сокетов для медиафайлов
   cors: { origin: "*" }
 });
 
@@ -127,16 +130,16 @@ io.on('connection', (socket) => {
     };
 
     const msgPayload = {
-      id: data.id || Date.now(),
+      id: data.id || Date.now() + Math.random(),
       senderUid: sender.uid,
       senderName: sender.username,
       senderAvatar: sender.avatar,
       targetUid: data.targetUid,
       isGroup: data.isGroup || false,
-      type: data.type,
-      content: data.content,
-      fileName: data.fileName,
-      fileSize: data.fileSize,
+      type: data.type || 'text',
+      content: data.content || '',
+      fileName: data.fileName || '',
+      fileSize: data.fileSize || 0,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -154,7 +157,7 @@ io.on('connection', (socket) => {
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
           type: 'text',
-          content: `🤖 Получил ваше сообщение типа [${data.type}]`,
+          content: `🤖 Получил ваше сообщение: "${data.content || '['+data.type+']'}"`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
@@ -215,7 +218,7 @@ io.on('connection', (socket) => {
 
   socket.on('end-call', (data) => {
     if (data.targetUid) {
-      io.to(data.targetUid).emit('call-ended');
+      io.to(data.targetUid).emit('call-ended', { reason: data.reason || 'ended' });
     }
   });
 
