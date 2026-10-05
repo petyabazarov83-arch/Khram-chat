@@ -4,8 +4,11 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+
+// Увеличиваем размер буфера до 100 МБ для передачи медиафайлов
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100 МБ для медиафайлов
+  maxHttpBufferSize: 1e8,
+  cors: { origin: "*" }
 });
 
 app.use(express.static('public'));
@@ -35,10 +38,8 @@ io.on('connection', (socket) => {
 
     registeredUsers.set(user.uid, userData);
     
-    // Подключаем сокет к персональной комнате
     socket.join(user.uid);
 
-    // Подключаем к комнатам групп
     groups.forEach((g) => {
       if (g.members.has(user.uid)) {
         socket.join(g.id);
