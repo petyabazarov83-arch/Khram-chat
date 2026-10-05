@@ -6,11 +6,11 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let isAudioRecording = false;
 let isCircleRecording = false;
-let currentFacingMode = 'user'; // 'user' или 'environment'
+let currentFacingMode = 'user';
 
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// --- 1. РЕГИСТРАЦИЯ SERVICE WORKER И УВЕДОМЛЕНИЙ ---
+// Регистрация Service Worker для фона
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js');
 }
@@ -19,13 +19,6 @@ if ('Notification' in window && Notification.permission !== 'granted') {
     Notification.requestPermission();
 }
 
-function triggerNotification(title, body) {
-    if (document.hidden && Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '/icon.png' });
-    }
-}
-
-// --- 2. ОБРАБОТКА ЧАТА И МЕДИАФАЙЛОВ ---
 function sendTextMessage() {
     const input = document.getElementById('message-input');
     if (!input.value.trim()) return;
@@ -50,31 +43,33 @@ function sendFile(input) {
     input.value = '';
 }
 
-// Запись Аудио (ГС) и Кружочков без confirm()
+// Запись ГС и Кружочков
 async function toggleAudioRecord() {
+    const btn = document.getElementById('rec-audio-btn');
     if (!isAudioRecording) {
         await startRecording(false);
-        document.getElementById('record-audio-btn').classList.add('active');
-        document.getElementById('record-audio-btn').innerText = '⏹ Остановить и отправить';
+        btn.classList.add('recording');
+        btn.innerText = '⏹ Стоп';
         isAudioRecording = true;
     } else {
-        stopRecording('audio');
-        document.getElementById('record-audio-btn').classList.remove('active');
-        document.getElementById('record-audio-btn').innerText = '🎤 Записать ГС';
+        stopRecording();
+        btn.classList.remove('recording');
+        btn.innerText = '🎙️ ГС';
         isAudioRecording = false;
     }
 }
 
 async function toggleCircleRecord() {
+    const btn = document.getElementById('rec-circle-btn');
     if (!isCircleRecording) {
         await startRecording(true);
-        document.getElementById('record-circle-btn').classList.add('active');
-        document.getElementById('record-circle-btn').innerText = '⏹ Остановить и отправить';
+        btn.classList.add('recording');
+        btn.innerText = '⏹ Стоп';
         isCircleRecording = true;
     } else {
-        stopRecording('circle');
-        document.getElementById('record-circle-btn').classList.remove('active');
-        document.getElementById('record-circle-btn').innerText = '⭕ Записать Кружочек';
+        stopRecording();
+        btn.classList.remove('recording');
+        btn.innerText = '⭕ Кружочек';
         isCircleRecording = false;
     }
 }
@@ -114,31 +109,35 @@ function stopRecording() {
     }
 }
 
-// Отображение сообщений в чате
+// Отображение сообщений
 socket.on('newMessage', (msg) => {
-    const chatBox = document.getElementById('chat-box');
+    const container = document.getElementById('chat-container');
     const div = document.createElement('div');
-    div.style.margin = '8px 0';
+    const isMy = msg.sender === socket.id;
+    
+    div.className = `msg-row ${isMy ? 'my' : ''}`;
 
     if (msg.type === 'text') {
         div.innerText = msg.content;
     } else if (msg.type === 'image') {
-        div.innerHTML = `<img src="${msg.content}" style="max-width: 250px; border-radius: 8px;">`;
+        div.innerHTML = `<img src="${msg.content}">`;
     } else if (msg.type === 'audio') {
         div.innerHTML = `<audio controls src="${msg.content}"></audio>`;
     } else if (msg.type === 'circle') {
         div.innerHTML = `<video class="circle-video" controls autoplay loop src="${msg.content}"></video>`;
     } else if (msg.type === 'file') {
-        div.innerHTML = `<a href="${msg.content}" download="${msg.name}" style="color: #0088cc;">📁 ${msg.name}</a>`;
+        div.innerHTML = `<a href="${msg.content}" download="${msg.name}" style="color: #fff;">📁 ${msg.name}</a>`;
     }
 
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    triggerNotification('Новое сообщение', 'Вам пришло новое медиафайлы или текст.');
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
 });
 
-// --- 3. ЗВОНКИ, КНОПКИ УПРАВЛЕНИЯ И ПЕРЕКЛЮЧЕНИЕ КАМЕР ---
+// Звонки и Управление Камерой/Микрофоном
+function toggleCallPanel() {
+    const panel = document.getElementById('call-section');
+    panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+}
 
 async function initLocalStream() {
     if (!localStream) {
@@ -155,7 +154,7 @@ function toggleMic() {
     const audioTrack = localStream.getAudioTracks()[0];
     if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
-        document.getElementById('mic-btn').innerText = audioTrack.enabled ? '🎙 Микрофон: Вкл' : '🎙 Микрофон: Выкл';
+        document.getElementById('mic-btn').innerText = audioTrack.enabled ? '🎙️ Мик: Вкл' : '🎙️ Мик: Выкл';
     }
 }
 
@@ -173,7 +172,6 @@ async function switchCamera() {
 
     currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
 
-    // Останавливаем текущий видео-трек
     const oldVideoTrack = localStream.getVideoTracks()[0];
     if (oldVideoTrack) oldVideoTrack.stop();
 
@@ -187,17 +185,17 @@ async function switchCamera() {
         localStream.addTrack(newVideoTrack);
         document.getElementById('local-video').srcObject = localStream;
 
-        // Если звонок уже активен, подменяем трек для собеседника
         if (peerConnection) {
             const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) sender.replaceTrack(newVideoTrack);
         }
     } catch (e) {
-        console.warn("Выбранная камера недоступна:", e);
+        console.warn("Камера недоступна:", e);
     }
 }
 
 async function startCall() {
+    document.getElementById('call-section').style.display = 'flex';
     await initLocalStream();
     createPeerConnection();
 
@@ -210,8 +208,8 @@ async function startCall() {
 }
 
 socket.on('incomingCall', async (data) => {
-    triggerNotification('Входящий звонок', 'Вам кто-то звонит!');
-    if (!confirm('Принять входящий звонок?')) return;
+    document.getElementById('call-section').style.display = 'flex';
+    if (!confirm('Принять звонок?')) return;
 
     await initLocalStream();
     createPeerConnection();
