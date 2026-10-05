@@ -106,7 +106,15 @@
     #controls { background: var(--bg-panel); padding: 8px; border-top: 1px solid var(--border-color); }
     .input-row { display: flex; align-items: center; gap: 6px; }
     #input { flex: 1; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 20px; background: var(--bg-main); color: var(--text-main); font-size: 14px; outline: none; }
-    .btn-icon { background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+    .btn-icon { background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; user-select: none; }
+    .btn-icon.active-rec { background: #ef4444; color: white; animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
     .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; }
 
     #call-modal {
@@ -119,7 +127,7 @@
     
     .call-controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
     .call-btn { background: #22c55e; border: none; color: white; padding: 10px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; }
-    .call-btn.off { background: #6e7681; }
+    .call-btn.off { background: #ef4444; }
     .call-btn.danger { background: #ef4444; }
 
     #record-modal {
@@ -208,7 +216,7 @@
 
         <h3>🎵 Рингтон звонков</h3>
         <input type="file" id="ringtone-input" accept="audio/*" class="input-field">
-        <div id="ringtone-status" style="font-size:12px; color:#22c55e;"></div>
+        <div id="ringtone-status" style="font-size:12px; color:#22c55e; margin-top:4px;"></div>
       </div>
     </div>
 
@@ -236,7 +244,7 @@
           <label class="btn-icon" title="Отправить файл/фото">
             📎<input type="file" id="file-input" style="display:none;" accept="*/*">
           </label>
-          <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение">🎤</button>
+          <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение (нажмите для записи)">🎤</button>
           <button class="btn-icon" id="record-circle-btn" title="Видеокружочек">⭕</button>
           <input id="input" autocomplete="off" placeholder="Сообщение..." />
           <button class="btn-icon btn-send" id="send-btn">➔</button>
@@ -260,6 +268,7 @@
     <div class="call-controls">
       <button id="toggle-mic-btn" class="call-btn">🎙 Микрофон</button>
       <button id="toggle-cam-btn" class="call-btn">📷 Камера</button>
+      <button id="switch-cam-btn" class="call-btn">🔄 Камера</button>
       <button id="accept-call-btn" class="call-btn" style="display:none;">Ответить</button>
       <button id="end-call-btn" class="call-btn danger">Завершить</button>
     </div>
@@ -279,6 +288,50 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+
+    // Запрос разрешения на push-уведомления (чтобы при свернутом браузере всё приходило)
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    function sendNotification(title, options) {
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        new Notification(title, options);
+      }
+    }
+
+    // Хранилище IndexedDB для надежного сохранения выбранного рингтона
+    const dbReq = indexedDB.open("KhramMediaDB", 1);
+    let db = null;
+    dbReq.onupgradeneeded = e => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("ringtones")) {
+        db.createObjectStore("ringtones");
+      }
+    };
+    dbReq.onsuccess = e => {
+      db = e.target.result;
+      loadSavedRingtone();
+    };
+
+    function saveRingtoneToDB(dataUrl) {
+      if (!db) return;
+      const tx = db.transaction("ringtones", "readwrite");
+      tx.objectStore("ringtones").put(dataUrl, "userRingtone");
+    }
+
+    function loadSavedRingtone() {
+      if (!db) return;
+      const tx = db.transaction("ringtones", "readonly");
+      const req = tx.objectStore("ringtones").get("userRingtone");
+      req.onsuccess = () => {
+        if (req.result) {
+          const ringtoneAudio = document.getElementById('custom-ringtone');
+          ringtoneAudio.src = req.result;
+          document.getElementById('ringtone-status').textContent = '🎵 Выбранный рингтон сохранён и готов';
+        }
+      };
+    }
 
     let myProfile = {
       uid: localStorage.getItem('khram_uid') || ('khram-user-' + Math.random().toString(36).substring(2, 8)),
@@ -363,7 +416,6 @@
       }
     });
 
-    // Поиск и импорт контактов
     document.getElementById('sync-sim-btn').addEventListener('click', () => {
       const inputPhones = prompt('Введите номера телефонов для поиска (через запятую):');
       if (inputPhones) {
@@ -390,7 +442,8 @@
 
     function playSystemRingtone() {
       if (ringtoneAudio.src) {
-        ringtoneAudio.play().catch(e => {});
+        ringtoneAudio.currentTime = 0;
+        ringtoneAudio.play().catch(e => console.log('Ошибка проигрывания рингтона:', e));
         return;
       }
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -412,7 +465,10 @@
     }
 
     function stopSystemRingtone() {
-      if (ringtoneAudio.src) ringtoneAudio.pause();
+      if (ringtoneAudio.src) {
+        ringtoneAudio.pause();
+        ringtoneAudio.currentTime = 0;
+      }
       if (synthInterval) clearInterval(synthInterval);
     }
 
@@ -421,16 +477,13 @@
       if (file) {
         const reader = new FileReader();
         reader.onload = (evt) => {
-          localStorage.setItem('khram_ringtone', evt.target.result);
+          saveRingtoneToDB(evt.target.result);
           ringtoneAudio.src = evt.target.result;
-          document.getElementById('ringtone-status').textContent = ' Рингтон сохранен!';
+          document.getElementById('ringtone-status').textContent = '🎵 Рингтон сохранен!';
         };
         reader.readAsDataURL(file);
       }
     });
-    if (localStorage.getItem('khram_ringtone')) {
-      ringtoneAudio.src = localStorage.getItem('khram_ringtone');
-    }
 
     function switchTab(pageId, targetBtn) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -634,7 +687,7 @@
       header.className = 'msg-header';
       header.innerHTML = `
         <span>${isMine ? 'Вы' : data.senderName} <span class="msg-time">${data.timestamp || ''}</span></span>
-        ${isMine ? `<button class="delete-btn" onclick="deleteMessage(${data.id})">🗑️</button>` : ''}
+        ${isMine ? `<button class="delete-btn" onclick="deleteMessage(${data.id})">🗑️️</button>` : ''}
       `;
       div.appendChild(header);
 
@@ -658,6 +711,11 @@
       saveMessageToHistory(data);
       if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
         renderMessageUI(data);
+      } else if (data.senderUid !== myProfile.uid) {
+        sendNotification(`Новое сообщение от ${data.senderName}`, {
+          body: data.type === 'text' ? data.content : `Отправил [${data.type}]`,
+          icon: data.senderAvatar || ''
+        });
       }
     });
 
@@ -685,7 +743,7 @@
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
-    // Отправка файлов и картинок
+    // Отправка любых файлов и фото
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -706,44 +764,54 @@
       reader.readAsDataURL(file);
     });
 
-    // Запись голосовых сообщений 🎤
-    let mediaRecorder, audioChunks = [];
-    document.getElementById('record-audio-btn').addEventListener('click', async () => {
-      if (!navigator.mediaDevices) return alert('Микрофон недоступен');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            socket.emit('chat message', {
-              senderUid: myProfile.uid,
-              targetUid: currentChatUid,
-              isGroup: isCurrentGroup,
-              type: 'audio',
-              content: evt.target.result
-            });
-          };
-          reader.readAsDataURL(blob);
-          stream.getTracks().forEach(t => t.stop());
-        };
+    // Удобная запись голосовых сообщений (без блокирующих всплывающих окон confirm)
+    let audioRecorder, audioChunks = [], isAudioRecording = false;
+    const recAudioBtn = document.getElementById('record-audio-btn');
 
-        if (confirm('Идет запись голоса... Нажмите ОК для остановки и отправки')) {
-          mediaRecorder.start();
-        }
-      } catch(e) { alert('Ошибка доступа к микрофону'); }
+    recAudioBtn.addEventListener('click', async () => {
+      if (!currentChatUid) return alert('Выберите чат');
+
+      if (!isAudioRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          audioRecorder.ondataavailable = e => audioChunks.push(e.data);
+          audioRecorder.onstop = () => {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              socket.emit('chat message', {
+                senderUid: myProfile.uid,
+                targetUid: currentChatUid,
+                isGroup: isCurrentGroup,
+                type: 'audio',
+                content: evt.target.result
+              });
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach(t => t.stop());
+          };
+
+          audioRecorder.start();
+          isAudioRecording = true;
+          recAudioBtn.classList.add('active-rec');
+        } catch(e) { alert('Ошибка доступа к микрофону'); }
+      } else {
+        audioRecorder.stop();
+        isAudioRecording = false;
+        recAudioBtn.classList.remove('active-rec');
+      }
     });
 
-    // Запись видеокружочков ⭕
+    // Запись видеокружочков
     let circleStream, circleRecorder, circleChunks = [];
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
 
     document.getElementById('record-circle-btn').addEventListener('click', async () => {
+      if (!currentChatUid) return alert('Выберите чат');
       try {
         circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
         circlePreview.srcObject = circleStream;
@@ -783,26 +851,72 @@
       recordModal.style.display = 'none';
     });
 
-    // WebRTC Звонки
+    // WebRTC Звонки и Управление (Камера / Микрофон / Переключение камеры)
     let peerConnection, localStream;
+    let currentFacingMode = 'user'; // 'user' - передняя, 'environment' - задняя
     const callModal = document.getElementById('call-modal');
     const remoteVideo = document.getElementById('remote-video');
     const localVideo = document.getElementById('local-video');
     const acceptCallBtn = document.getElementById('accept-call-btn');
+    const toggleMicBtn = document.getElementById('toggle-mic-btn');
+    const toggleCamBtn = document.getElementById('toggle-cam-btn');
+    const switchCamBtn = document.getElementById('switch-cam-btn');
     let callTargetSocketId = null;
 
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    async function setupCallMedia() {
+    async function setupCallMedia(facing = 'user') {
       if (localStream) localStream.getTracks().forEach(t => t.stop());
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: facing }, 
+        audio: true 
+      });
       localVideo.srcObject = localStream;
+      currentFacingMode = facing;
+      
+      toggleMicBtn.classList.remove('off');
+      toggleCamBtn.classList.remove('off');
     }
+
+    // Переключение Микрофона
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          toggleMicBtn.classList.toggle('off', !audioTrack.enabled);
+        }
+      }
+    });
+
+    // Переключение Камеры (Вкл/Выкл)
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          toggleCamBtn.classList.toggle('off', !videoTrack.enabled);
+        }
+      }
+    });
+
+    // Переключение передней/задней камеры
+    switchCamBtn.addEventListener('click', async () => {
+      const newFacing = (currentFacingMode === 'user') ? 'environment' : 'user';
+      await setupCallMedia(newFacing);
+      if (peerConnection) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender && videoTrack) {
+          sender.replaceTrack(videoTrack);
+        }
+      }
+    });
 
     document.getElementById('start-call-btn').addEventListener('click', async () => {
       if (!currentChatUid) return;
       callModal.style.display = 'flex';
-      await setupCallMedia();
+      await setupCallMedia('user');
 
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
@@ -822,13 +936,18 @@
       acceptCallBtn.style.display = 'flex';
 
       playSystemRingtone();
+      sendNotification(`Входящий звонок`, {
+        body: `Вам звонит ${data.fromName || 'Собеседник'}`,
+        icon: data.fromAvatar || ''
+      });
+
       window.incomingOffer = data.offer;
     });
 
     acceptCallBtn.addEventListener('click', async () => {
       stopSystemRingtone();
       acceptCallBtn.style.display = 'none';
-      await setupCallMedia();
+      await setupCallMedia('user');
 
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
@@ -881,4 +1000,4 @@
     renderContacts();
   </script>
 </body>
-    </html>
+  </html>
