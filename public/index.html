@@ -90,7 +90,7 @@
 
     .msg {
       max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 14px; word-break: break-word;
-      display: flex; flex-direction: column; position: relative;
+      display: flex; flex-direction: column; position: relative; color: var(--text-main);
     }
     .msg.mine { align-self: flex-end; background: var(--msg-mine-bg); border: 1px solid var(--border-color); }
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
@@ -244,7 +244,7 @@
           <label class="btn-icon" title="Отправить файл/фото">
             📎<input type="file" id="file-input" style="display:none;" accept="*/*">
           </label>
-          <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение (нажмите для записи)">🎤</button>
+          <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение">🎤</button>
           <button class="btn-icon" id="record-circle-btn" title="Видеокружочек">⭕</button>
           <input id="input" autocomplete="off" placeholder="Сообщение..." />
           <button class="btn-icon btn-send" id="send-btn">➔</button>
@@ -253,7 +253,7 @@
     </div>
   </div>
 
-  <!-- Звонок -->
+  <!-- Окно звонка -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👤</div>
@@ -274,7 +274,7 @@
     </div>
   </div>
 
-  <!-- Окно записи кружка -->
+  <!-- Запись кружка -->
   <div id="record-modal">
     <video id="circle-preview" autoplay playsinline muted></video>
     <div style="display:flex; gap:10px;">
@@ -288,26 +288,47 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    let swRegistration = null;
+    let callTimeoutTimer = null; // Таймер ожидания звонка на 45 сек
 
-    // Запрос разрешения на push-уведомления (чтобы при свернутом браузере всё приходило)
+    // Регистрация Service Worker для Push-уведомлений с кнопкой «Ответить» при свернутом браузере
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        swRegistration = reg;
+      });
+
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.action === 'accept_incoming_call') {
+          acceptCallAction();
+        }
+      });
+    }
+
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
 
-    function sendNotification(title, options) {
-      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-        new Notification(title, options);
+    function sendCallNotification(callerName, callerAvatar) {
+      if (swRegistration && Notification.permission === 'granted') {
+        swRegistration.showNotification(`Входящий звонок от ${callerName}`, {
+          body: 'Нажмите «Ответить», чтобы принять вызов',
+          icon: callerAvatar || '',
+          tag: 'incoming-call',
+          renotify: true,
+          requireInteraction: true,
+          actions: [
+            { action: 'accept_call', title: '📞 Ответить' }
+          ]
+        });
       }
     }
 
-    // Хранилище IndexedDB для надежного сохранения выбранного рингтона
+    // Хранилище IndexedDB для рингтона
     const dbReq = indexedDB.open("KhramMediaDB", 1);
     let db = null;
     dbReq.onupgradeneeded = e => {
       db = e.target.result;
-      if (!db.objectStoreNames.contains("ringtones")) {
-        db.createObjectStore("ringtones");
-      }
+      if (!db.objectStoreNames.contains("ringtones")) db.createObjectStore("ringtones");
     };
     dbReq.onsuccess = e => {
       db = e.target.result;
@@ -328,7 +349,7 @@
         if (req.result) {
           const ringtoneAudio = document.getElementById('custom-ringtone');
           ringtoneAudio.src = req.result;
-          document.getElementById('ringtone-status').textContent = '🎵 Выбранный рингтон сохранён и готов';
+          document.getElementById('ringtone-status').textContent = '🎵 Выбранный рингтон сохранён';
         }
       };
     }
@@ -375,21 +396,6 @@
 
     socket.on('connect', () => {
       socket.emit('register', myProfile);
-    });
-
-    socket.on('user-profile-updated', (updatedData) => {
-      let contactsChanged = false;
-      contacts = contacts.map(c => {
-        if (c.uid === updatedData.uid) {
-          contactsChanged = true;
-          return { ...c, name: updatedData.username, avatar: updatedData.avatar };
-        }
-        return c;
-      });
-      if (contactsChanged) {
-        localStorage.setItem('khram_contacts', JSON.stringify(contacts));
-        renderContacts();
-      }
     });
 
     function saveProfile() {
@@ -619,23 +625,12 @@
 
       if (isCurrentGroup) {
         const g = myGroups.find(group => group.id === currentChatUid);
-        if (g && g.bgImage) {
-          msgBox.style.backgroundImage = `url(${g.bgImage})`;
-        }
+        if (g && g.bgImage) msgBox.style.backgroundImage = `url(${g.bgImage})`;
       } else {
         const preset = localStorage.getItem(`bg_chat_${currentChatUid}`);
-        if (preset) {
-          msgBox.classList.add(preset);
-        }
+        if (preset) msgBox.classList.add(preset);
       }
     }
-
-    socket.on('group-bg-updated', ({ groupId, bgImage }) => {
-      const g = myGroups.find(group => group.id === groupId);
-      if (g) g.bgImage = bgImage;
-      localStorage.setItem('khram_groups', JSON.stringify(myGroups));
-      if (currentChatUid === groupId) applyChatBackground();
-    });
 
     function updateActiveChatStatus() {
       if (!currentChatUid) return;
@@ -675,8 +670,12 @@
     }
 
     const messagesDiv = document.getElementById('messages');
+
+    // Исправлено: Гарантированное отображение всех сообщений
     function renderMessageUI(data) {
-      if (document.getElementById(`msg-${data.id}`)) return;
+      if (!data) return;
+      const existingMsg = document.getElementById(`msg-${data.id}`);
+      if (existingMsg) return;
 
       const isMine = data.senderUid === myProfile.uid;
       const div = document.createElement('div');
@@ -686,23 +685,47 @@
       const header = document.createElement('div');
       header.className = 'msg-header';
       header.innerHTML = `
-        <span>${isMine ? 'Вы' : data.senderName} <span class="msg-time">${data.timestamp || ''}</span></span>
-        ${isMine ? `<button class="delete-btn" onclick="deleteMessage(${data.id})">🗑️️</button>` : ''}
+        <span>${isMine ? 'Вы' : (data.senderName || 'Собеседник')} <span class="msg-time">${data.timestamp || ''}</span></span>
+        ${isMine ? `<button class="delete-btn" onclick="deleteMessage('${data.id}')">🗑</button>` : ''}
       `;
       div.appendChild(header);
 
+      const contentBox = document.createElement('div');
+      contentBox.style.marginTop = '4px';
+
       if (data.type === 'text') {
-        const p = document.createElement('div'); p.textContent = data.content; div.appendChild(p);
+        contentBox.textContent = data.content || '';
       } else if (data.type === 'image') {
-        const img = document.createElement('img'); img.src = data.content; img.style.maxWidth = '100%'; img.style.borderRadius = '8px'; div.appendChild(img);
+        const img = document.createElement('img');
+        img.src = data.content;
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '8px';
+        contentBox.appendChild(img);
       } else if (data.type === 'audio') {
-        const audio = document.createElement('audio'); audio.src = data.content; audio.controls = true; div.appendChild(audio);
+        const audio = document.createElement('audio');
+        audio.src = data.content;
+        audio.controls = true;
+        contentBox.appendChild(audio);
       } else if (data.type === 'circle') {
-        const video = document.createElement('video'); video.src = data.content; video.controls = true; video.autoplay = true; video.loop = true; video.muted = true; video.playsInline = true; video.className = 'video-circle'; div.appendChild(video);
+        const video = document.createElement('video');
+        video.src = data.content;
+        video.controls = true;
+        video.autoplay = true;
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.className = 'video-circle';
+        contentBox.appendChild(video);
       } else if (data.type === 'file') {
-        const a = document.createElement('a'); a.href = data.content; a.download = data.fileName || 'file'; a.style.color = 'var(--brand-color)'; a.textContent = `📁 ${data.fileName}`; div.appendChild(a);
+        const a = document.createElement('a');
+        a.href = data.content;
+        a.download = data.fileName || 'файл';
+        a.style.color = 'var(--brand-color)';
+        a.textContent = `📁 ${data.fileName || 'Скачать файл'}`;
+        contentBox.appendChild(a);
       }
 
+      div.appendChild(contentBox);
       messagesDiv.appendChild(div);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
@@ -711,11 +734,6 @@
       saveMessageToHistory(data);
       if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
         renderMessageUI(data);
-      } else if (data.senderUid !== myProfile.uid) {
-        sendNotification(`Новое сообщение от ${data.senderName}`, {
-          body: data.type === 'text' ? data.content : `Отправил [${data.type}]`,
-          icon: data.senderAvatar || ''
-        });
       }
     });
 
@@ -728,7 +746,7 @@
       if (el) el.remove();
       const key = getHistoryKey(currentChatUid);
       let saved = JSON.parse(localStorage.getItem(key) || '[]');
-      saved = saved.filter(m => m.id !== data.msgId);
+      saved = saved.filter(m => String(m.id) !== String(data.msgId));
       localStorage.setItem(key, JSON.stringify(saved));
     });
 
@@ -736,14 +754,20 @@
     function sendText() {
       const text = input.value.trim();
       if (text && currentChatUid) {
-        socket.emit('chat message', { senderUid: myProfile.uid, targetUid: currentChatUid, isGroup: isCurrentGroup, type: 'text', content: text });
+        socket.emit('chat message', {
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: isCurrentGroup,
+          type: 'text',
+          content: text
+        });
         input.value = '';
       }
     }
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
-    // Отправка любых файлов и фото
+    // Отправка любых файлов / фото
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -764,7 +788,7 @@
       reader.readAsDataURL(file);
     });
 
-    // Удобная запись голосовых сообщений (без блокирующих всплывающих окон confirm)
+    // Голосовые сообщения
     let audioRecorder, audioChunks = [], isAudioRecording = false;
     const recAudioBtn = document.getElementById('record-audio-btn');
 
@@ -805,7 +829,7 @@
       }
     });
 
-    // Запись видеокружочков
+    // Кружочки
     let circleStream, circleRecorder, circleChunks = [];
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
@@ -851,9 +875,9 @@
       recordModal.style.display = 'none';
     });
 
-    // WebRTC Звонки и Управление (Камера / Микрофон / Переключение камеры)
+    // WebRTC Звонки с таймаутом на 45 секунд
     let peerConnection, localStream;
-    let currentFacingMode = 'user'; // 'user' - передняя, 'environment' - задняя
+    let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
     const remoteVideo = document.getElementById('remote-video');
     const localVideo = document.getElementById('local-video');
@@ -878,7 +902,6 @@
       toggleCamBtn.classList.remove('off');
     }
 
-    // Переключение Микрофона
     toggleMicBtn.addEventListener('click', () => {
       if (localStream) {
         const audioTrack = localStream.getAudioTracks()[0];
@@ -889,7 +912,6 @@
       }
     });
 
-    // Переключение Камеры (Вкл/Выкл)
     toggleCamBtn.addEventListener('click', () => {
       if (localStream) {
         const videoTrack = localStream.getVideoTracks()[0];
@@ -900,7 +922,6 @@
       }
     });
 
-    // Переключение передней/задней камеры
     switchCamBtn.addEventListener('click', async () => {
       const newFacing = (currentFacingMode === 'user') ? 'environment' : 'user';
       await setupCallMedia(newFacing);
@@ -912,6 +933,15 @@
         }
       }
     });
+
+    function startCallTimeout() {
+      clearTimeout(callTimeoutTimer);
+      callTimeoutTimer = setTimeout(() => {
+        alert('Собеседник не ответил (Время ожидания истекло - 45 сек)');
+        socket.emit('end-call', { targetUid: currentChatUid, reason: 'timeout' });
+        closeCall();
+      }, 45000); // 45 секунд
+    }
 
     document.getElementById('start-call-btn').addEventListener('click', async () => {
       if (!currentChatUid) return;
@@ -927,6 +957,8 @@
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer, isGroup: isCurrentGroup });
+
+      startCallTimeout();
     });
 
     socket.on('incoming-call', async (data) => {
@@ -936,15 +968,14 @@
       acceptCallBtn.style.display = 'flex';
 
       playSystemRingtone();
-      sendNotification(`Входящий звонок`, {
-        body: `Вам звонит ${data.fromName || 'Собеседник'}`,
-        icon: data.fromAvatar || ''
-      });
+      sendCallNotification(data.fromName || 'Собеседник', data.fromAvatar);
 
       window.incomingOffer = data.offer;
+      startCallTimeout();
     });
 
-    acceptCallBtn.addEventListener('click', async () => {
+    async function acceptCallAction() {
+      clearTimeout(callTimeoutTimer);
       stopSystemRingtone();
       acceptCallBtn.style.display = 'none';
       await setupCallMedia('user');
@@ -960,9 +991,12 @@
       await peerConnection.setLocalDescription(answer);
 
       socket.emit('make-answer', { toSocketId: callTargetSocketId, answer });
-    });
+    }
+
+    acceptCallBtn.addEventListener('click', acceptCallAction);
 
     socket.on('call-answered', async (data) => {
+      clearTimeout(callTimeoutTimer);
       if (peerConnection) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
       }
@@ -975,6 +1009,7 @@
     });
 
     function closeCall() {
+      clearTimeout(callTimeoutTimer);
       stopSystemRingtone();
       if (peerConnection) { peerConnection.close(); peerConnection = null; }
       if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
