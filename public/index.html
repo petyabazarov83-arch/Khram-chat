@@ -147,7 +147,7 @@
       </div>
       <div>
         <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
-        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов по номерам">📱+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов SIM/устройства">📱+</button>
       </div>
     </header>
 
@@ -285,6 +285,7 @@
   </div>
 
   <audio id="custom-ringtone" loop></audio>
+  <input type="file" id="vcf-file-input" accept=".vcf" style="display:none;">
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -421,28 +422,94 @@
       }
     });
 
-    document.getElementById('sync-sim-btn').addEventListener('click', () => {
-      const inputPhones = prompt('Введите номера телефонов для поиска (через запятую):');
-      if (inputPhones) {
-        const phoneArray = inputPhones.split(',').map(p => p.trim());
-        socket.emit('sync-contacts', phoneArray);
+    // ==========================================
+    // ИСПРАВЛЕННАЯ СИНХРОНИЗАЦИЯ КОНТАКТОВ С СИМ/УСТРОЙСТВА
+    // ==========================================
+    document.getElementById('sync-sim-btn').addEventListener('click', async () => {
+      let extractedPhones = [];
+
+      // 1. Попытка запросить контакты напрямую из мобильного браузера (Contact Picker API)
+      if ('contacts' in navigator && 'ContactsManager' in window) {
+        try {
+          const props = ['tel'];
+          const selectedContacts = await navigator.contacts.select(props, { multiple: true });
+          selectedContacts.forEach(c => {
+            if (c.tel) {
+              c.tel.forEach(t => extractedPhones.push(t));
+            }
+          });
+        } catch (err) {
+          console.log('Чтение контактов отменено или временно недоступно:', err);
+        }
+      }
+
+      // 2. Если API не вернул контактов, спрашиваем способ ввода
+      if (extractedPhones.length === 0) {
+        const option = confirm("Нажмите 'ОК', чтобы выбрать файл экспорта контактов (.vcf с SIM-карты), или 'Отмена', чтобы ввести номера вручную.");
+        
+        if (option) {
+          document.getElementById('vcf-file-input').click();
+          return;
+        } else {
+          const input = prompt('Введите номера телефонов для поиска через запятую:');
+          if (input) {
+            extractedPhones = input.split(',').map(p => p.trim());
+          }
+        }
+      }
+
+      if (extractedPhones.length > 0) {
+        socket.emit('sync-contacts', extractedPhones);
       }
     });
 
+    // Обработчик импорта .vcf файла экспорта телефонной книги
+    document.getElementById('vcf-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target.result;
+        const matches = text.match(/TEL.*?:([+\d\s\-\(\)]+)/gi) || [];
+        const foundPhones = matches.map(m => m.replace(/TEL.*?:/i, '').trim());
+
+        if (foundPhones.length > 0) {
+          socket.emit('sync-contacts', foundPhones);
+        } else {
+          alert('В выбранном VCF-файле не найдено номеров телефонов.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // Принятие найденных контактов и АВТОМАТИЧЕСКОЕ создание чатов
     socket.on('contacts-synced', (foundContacts) => {
-      let addedCount = 0;
+      let newCount = 0;
       foundContacts.forEach(fc => {
-        if (fc.uid !== myProfile.uid && !contacts.some(c => c.uid === fc.uid)) {
-          contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
-          addedCount++;
+        if (fc.uid !== myProfile.uid) {
+          const existingIdx = contacts.findIndex(c => c.uid === fc.uid);
+          if (existingIdx !== -1) {
+            // Обновляем существующий контакт
+            contacts[existingIdx].name = fc.name;
+            contacts[existingIdx].avatar = fc.avatar;
+          } else {
+            // Добавляем новый контакт и создаем с ним чат
+            contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
+            newCount++;
+          }
         }
       });
+
       localStorage.setItem('khram_contacts', JSON.stringify(contacts));
       renderContacts();
-      if (addedCount > 0) {
-        alert(`Найдено и добавлено контактов: ${addedCount}`);
+
+      if (newCount > 0) {
+        alert(`🎉 Найдено и добавлено новых пользователей: ${newCount}! ЧАТЫ С НИМИ ДОБАВЛЕНЫ В СПИСОК.`);
+      } else if (foundContacts.length > 0) {
+        alert('Все найденные по этим номерам пользователи уже находятся у вас в чатах!');
       } else {
-        alert('Пользователи с такими номерами не найдены или уже есть у вас в контактах');
+        alert('Пользователи с такими номерами еще не зарегистрированы в Храме.');
       }
     });
 
