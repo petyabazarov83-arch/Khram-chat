@@ -5,14 +5,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100 МБ
+  maxHttpBufferSize: 1e8 // 100 МБ для видео и файлов
 });
 
 app.use(express.static('public'));
 
 const registeredUsers = new Map();
 const socketToUid = new Map();
-const groups = new Map(); // groupId -> { id, name, ownerUid, admins: Set, members: Set, bgImage: string }
+const groups = new Map();
 
 function broadcastOnlineUsers() {
   const onlineUids = Array.from(socketToUid.values());
@@ -36,7 +36,6 @@ io.on('connection', (socket) => {
     registeredUsers.set(user.uid, userData);
     socket.join(user.uid);
 
-    // Подключаем пользователя ко всем его группам
     groups.forEach((g) => {
       if (g.members.has(user.uid)) {
         socket.join(g.id);
@@ -72,7 +71,6 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedUsers);
   });
 
-  // Управление группами
   socket.on('create-group', ({ name, members, ownerUid }) => {
     const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
     const membersSet = new Set(members);
@@ -152,7 +150,7 @@ io.on('connection', (socket) => {
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
           type: 'text',
-          content: `🤖 Ответ на: "${data.content}"`,
+          content: `🤖 Ответ на сообщение типа [${data.type}]: ${data.content ? data.content.substring(0, 30) + '...' : ''}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
@@ -172,7 +170,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // WebRTC Сигналинг звонков
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
