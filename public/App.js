@@ -19,6 +19,7 @@ if ('Notification' in window && Notification.permission !== 'granted') {
     Notification.requestPermission();
 }
 
+// Отправка текста
 function sendTextMessage() {
     const input = document.getElementById('message-input');
     if (!input.value.trim()) return;
@@ -26,6 +27,7 @@ function sendTextMessage() {
     input.value = '';
 }
 
+// Отправка любых файлов и фото
 function sendFile(input) {
     const file = input.files[0];
     if (!file) return;
@@ -43,7 +45,7 @@ function sendFile(input) {
     input.value = '';
 }
 
-// Запись ГС и Кружочков
+// Запись ГС
 async function toggleAudioRecord() {
     const btn = document.getElementById('rec-audio-btn');
     if (!isAudioRecording) {
@@ -59,6 +61,7 @@ async function toggleAudioRecord() {
     }
 }
 
+// Запись Видео-кружочков
 async function toggleCircleRecord() {
     const btn = document.getElementById('rec-circle-btn');
     if (!isCircleRecording) {
@@ -80,27 +83,31 @@ async function startRecording(isVideo) {
         ? { audio: true, video: { facingMode: 'user', width: 300, height: 300 } } 
         : { audio: true };
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    mediaRecorder = new MediaRecorder(stream);
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        mediaRecorder = new MediaRecorder(stream);
 
-    mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: isVideo ? 'video/webm' : 'audio/webm' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            socket.emit('sendMessage', {
-                type: isVideo ? 'circle' : 'audio',
-                content: reader.result
-            });
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
         };
-        reader.readAsDataURL(blob);
-        stream.getTracks().forEach(track => track.stop());
-    };
 
-    mediaRecorder.start();
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: isVideo ? 'video/webm' : 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                socket.emit('sendMessage', {
+                    type: isVideo ? 'circle' : 'audio',
+                    content: reader.result
+                });
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+    } catch (err) {
+        alert('Ошибка доступа к микрофону/камере');
+    }
 }
 
 function stopRecording() {
@@ -109,7 +116,7 @@ function stopRecording() {
     }
 }
 
-// Отображение сообщений
+// Прием и отрисовка всех видов сообщений
 socket.on('newMessage', (msg) => {
     const container = document.getElementById('chat-container');
     const div = document.createElement('div');
@@ -120,20 +127,20 @@ socket.on('newMessage', (msg) => {
     if (msg.type === 'text') {
         div.innerText = msg.content;
     } else if (msg.type === 'image') {
-        div.innerHTML = `<img src="${msg.content}">`;
+        div.innerHTML = `<img src="${msg.content}" onclick="window.open(this.src)">`;
     } else if (msg.type === 'audio') {
         div.innerHTML = `<audio controls src="${msg.content}"></audio>`;
     } else if (msg.type === 'circle') {
         div.innerHTML = `<video class="circle-video" controls autoplay loop src="${msg.content}"></video>`;
     } else if (msg.type === 'file') {
-        div.innerHTML = `<a href="${msg.content}" download="${msg.name}" style="color: #fff;">📁 ${msg.name}</a>`;
+        div.innerHTML = `<a href="${msg.content}" download="${msg.name}" style="color: #5288c1; text-decoration: underline;">📁 ${msg.name}</a>`;
     }
 
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 });
 
-// Звонки и Управление Камерой/Микрофоном
+// Звонки
 function toggleCallPanel() {
     const panel = document.getElementById('call-section');
     panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
@@ -190,7 +197,7 @@ async function switchCamera() {
             if (sender) sender.replaceTrack(newVideoTrack);
         }
     } catch (e) {
-        console.warn("Камера недоступна:", e);
+        console.warn("Ошибка переключения камеры:", e);
     }
 }
 
@@ -209,7 +216,7 @@ async function startCall() {
 
 socket.on('incomingCall', async (data) => {
     document.getElementById('call-section').style.display = 'flex';
-    if (!confirm('Принять звонок?')) return;
+    if (!confirm('Входящий звонок! Принять?')) return;
 
     await initLocalStream();
     createPeerConnection();
@@ -252,6 +259,7 @@ function endCall() {
     peerConnection = null;
     document.getElementById('local-video').srcObject = null;
     document.getElementById('remote-video').srcObject = null;
+    document.getElementById('call-section').style.display = 'none';
     socket.emit('endCall');
 }
 
