@@ -35,19 +35,21 @@
       height: 100%; width: 100%;
       overflow: hidden;
     }
-    #app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; }
+    #app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; position: relative; z-index: 1; }
 
     header {
       background: var(--bg-panel); padding: 10px 16px; display: flex;
       justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);
+      z-index: 10;
     }
     .brand { display: flex; align-items: center; gap: 8px; }
     .brand h1 { margin: 0; font-size: 18px; color: var(--brand-color); font-weight: bold; letter-spacing: 2px; transition: color 0.3s; }
 
-    .nav-tabs { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); }
+    .nav-tabs { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); z-index: 10; }
     .tab-btn {
       flex: 1; padding: 12px; background: none; border: none;
       color: var(--text-muted); font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent;
+      pointer-events: auto;
     }
     .tab-btn.active { color: var(--brand-color); border-bottom-color: var(--brand-color); }
 
@@ -74,7 +76,7 @@
     #chat-list { flex: 1; overflow-y: auto; }
     .chat-item {
       padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center;
-      gap: 12px; cursor: pointer;
+      gap: 12px; cursor: pointer; user-select: none;
     }
     .chat-item:hover { background: var(--bg-panel); }
     .chat-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #21262d; display: flex; align-items: center; justify-content: center; font-weight: bold; overflow: hidden; flex-shrink: 0; }
@@ -91,7 +93,6 @@
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
 
-    /* Кружочки */
     .video-circle {
       width: 160px; height: 160px; border-radius: 50%; object-fit: cover;
       border: 3px solid var(--brand-color); margin-top: 4px; display: block;
@@ -111,67 +112,52 @@
       100% { transform: scale(1); }
     }
 
-    .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; }
+    .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; cursor: pointer; }
 
-    /* Модальные окна */
+    /* МОДАЛЬНЫЕ ОКНА: по умолчанию pointer-events: none, чтобы не блокировать клики под ними */
+    .modal, #circle-modal, #call-modal, #record-modal {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+    .modal.active, #circle-modal.active, #call-modal.active, #record-modal.active {
+      display: flex !important;
+      z-index: 1000;
+      pointer-events: auto;
+    }
+
     .modal {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.85); z-index: 1000; flex-direction: column;
+      background: rgba(0,0,0,0.85); flex-direction: column;
       align-items: center; justify-content: center; padding: 20px;
     }
-    .modal.active { display: flex !important; }
 
     #circle-modal {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.9); z-index: 2000; flex-direction: column;
       align-items: center; justify-content: center;
     }
-    #circle-modal.active { display: flex !important; }
     #circle-modal-video {
       width: 300px; height: 300px; border-radius: 50%; object-fit: cover;
       border: 4px solid var(--brand-color); box-shadow: 0 0 20px rgba(0,0,0,0.8);
     }
 
     #call-modal {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0d1117;
-      flex-direction: column; align-items: center; justify-content: space-between; padding: 20px 10px; z-index: 1000;
+      background: #0d1117; flex-direction: column; align-items: center;
+      justify-content: space-between; padding: 20px 10px;
     }
-    #call-modal.active { display: flex !important; }
     .video-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-      width: 100%;
-      max-width: 600px;
-      flex: 1;
-      overflow-y: auto;
-      align-items: center;
-      justify-content: center;
-      padding: 10px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px; width: 100%; max-width: 600px; flex: 1; overflow-y: auto;
+      align-items: center; justify-content: center; padding: 10px;
     }
     .video-card {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 3/4;
-      background: #161b22;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border-color);
+      position: relative; width: 100%; aspect-ratio: 3/4; background: #161b22;
+      border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);
     }
-    .video-card video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+    .video-card video { width: 100%; height: 100%; object-fit: cover; }
     .video-card .user-label {
-      position: absolute;
-      bottom: 6px;
-      left: 6px;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 4px;
+      position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.6);
+      color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;
     }
     
     .call-controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
@@ -180,10 +166,9 @@
     .call-btn.danger { background: #ef4444; }
 
     #record-modal {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85);
-      flex-direction: column; align-items: center; justify-content: center; gap: 15px; z-index: 1000;
+      background: rgba(0,0,0,0.85); flex-direction: column;
+      align-items: center; justify-content: center; gap: 15px;
     }
-    #record-modal.active { display: flex !important; }
     #circle-preview { width: 220px; height: 220px; border-radius: 50%; border: 4px solid var(--brand-color); object-fit: cover; background: #000; }
   </style>
 </head>
@@ -311,12 +296,11 @@
     </div>
   </div>
 
-  <!-- Модалка просмотра видеокружочка (Telegram Style) -->
+  <!-- Модальные окна -->
   <div id="circle-modal" onclick="closeCircleModal()">
     <video id="circle-modal-video" autoplay playsinline></video>
   </div>
 
-  <!-- Модалка создания группы -->
   <div id="group-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); width:100%; max-width:320px;">
       <h3>👥 Создать группу</h3>
@@ -330,10 +314,9 @@
     </div>
   </div>
 
-  <!-- Модалка смены фона -->
   <div id="bg-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
-      <h3>🖼️ Фон чата</h3>
+      <h3>🖼️️ Фон чата</h3>
       <label class="call-btn" style="justify-content:center;">
         Загрузить картинку
         <input type="file" id="bg-file-input" accept="image/*" style="display:none;">
@@ -343,7 +326,6 @@
     </div>
   </div>
 
-  <!-- Окно звонка с поддержкой мультипользовательской сетки (Личные и Групповые) -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👥</div>
@@ -366,7 +348,6 @@
     </div>
   </div>
 
-  <!-- Запись кружка -->
   <div id="record-modal">
     <video id="circle-preview" autoplay playsinline muted></video>
     <div style="display:flex; gap:10px;">
@@ -427,9 +408,7 @@
       }
     });
 
-    // ==========================================
-    // INDEXEDDB ДЛЯ РИНГТОНА (До 46 МБ)
-    // ==========================================
+    // INDEXEDDB РИНГТОН
     let db = null;
     const request = indexedDB.open("KhramMediaDB", 1);
     request.onupgradeneeded = (e) => {
@@ -490,20 +469,17 @@
     document.getElementById("ringtone-input").addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
-      const maxSize = 46 * 1024 * 1024; // 46MB
-      if (file.size > maxSize) {
+      if (file.size > 46 * 1024 * 1024) {
         alert("Размер рингтона превышает 46 МБ!");
         return;
       }
-
       saveRingtoneToDB(file, file.name);
     });
 
     document.getElementById("play-ringtone-btn").addEventListener("click", () => {
       if (customRingtoneAudio.paused) {
         if (!ringtoneLoaded) {
-          alert("Кастомный рингтон не установлен. Используется стандартный.");
+          alert("Кастомный рингтон не установлен.");
           return;
         }
         customRingtoneAudio.play().catch(() => {});
@@ -526,7 +502,7 @@
         ringtoneLoaded = false;
         document.getElementById("ringtone-status").textContent = "Стандартный рингтон";
         document.getElementById("play-ringtone-btn").textContent = "▶ Прослушать";
-        alert("Рингтон сброшен на стандартный.");
+        alert("Рингтон сброшен.");
       };
     });
 
@@ -545,15 +521,10 @@
       }
     }
 
-    // ==========================================
-    // НАСТРОЙКИ ТЕМЫ И ЦВЕТА
-    // ==========================================
+    // ТЕМЫ
     const themeSelect = document.getElementById('theme-select');
     const brandColorSelect = document.getElementById('brand-color-select');
     const brandTitle = document.getElementById('brand-title');
-
-    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
-    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
 
     function applyTheme(theme) {
       if (theme === 'light') {
@@ -572,15 +543,13 @@
       localStorage.setItem('khram_brand_color', color);
     }
 
-    applyTheme(savedTheme);
-    applyBrandColor(savedBrandColor);
+    applyTheme(localStorage.getItem('khram_theme') || 'dark');
+    applyBrandColor(localStorage.getItem('khram_brand_color') || '#f59e0b');
 
     themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
-    // ==========================================
-    // ПОИСК ПОЛЬЗОВАТЕЛЕЙ
-    // ==========================================
+    // КОНТАКТЫ
     document.getElementById('sync-sim-btn').addEventListener('click', async () => {
       let extractedPhones = [];
       if ('contacts' in navigator && 'ContactsManager' in window) {
@@ -672,12 +641,10 @@
       });
     }
 
-    // ==========================================
     // УДАЛЕНИЕ ЧАТА
-    // ==========================================
     document.getElementById('delete-chat-btn').addEventListener('click', () => {
       if (!currentChatUid) return;
-      if (confirm('Вы уверены, что хотите удалить этот чат и всю историю сообщений?')) {
+      if (confirm('Удалить этот чат и историю?')) {
         localStorage.removeItem(getHistoryKey(currentChatUid));
         localStorage.removeItem(`chat_bg_${currentChatUid}`);
 
@@ -694,9 +661,7 @@
       }
     });
 
-    // ==========================================
-    // УВЕЛИЧЕНИЕ КРУЖКА (TELEGRAM STYLE)
-    // ==========================================
+    // КРУЖОК В ОКНЕ
     function playCircleModal(src) {
       const circleModal = document.getElementById('circle-modal');
       const video = document.getElementById('circle-modal-video');
@@ -714,9 +679,7 @@
       circleModal.classList.remove('active');
     }
 
-    // ==========================================
     // СОЗДАНИЕ ГРУППЫ
-    // ==========================================
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
       const listDiv = document.getElementById('group-members-list');
@@ -752,9 +715,7 @@
       }
     });
 
-    // ==========================================
     // ФОН ЧАТА
-    // ==========================================
     const bgModal = document.getElementById('bg-modal');
     document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
     document.getElementById('close-bg-btn').addEventListener('click', () => bgModal.classList.remove('active'));
@@ -781,9 +742,7 @@
       }
     });
 
-    // ==========================================
-    // ГОЛОСОВЫЕ СООБЩЕНИЯ
-    // ==========================================
+    // ГОЛОСОВЫЕ
     let mediaRecorderAudio = null;
     let audioChunks = [];
     const recordAudioBtn = document.getElementById('record-audio-btn');
@@ -820,13 +779,11 @@
         mediaRecorderAudio.start();
         recordAudioBtn.classList.add('active-rec');
       } catch (err) {
-        alert('Не удалось получить доступ к микрофону');
+        alert('Доступ к микрофону отклонен');
       }
     });
 
-    // ==========================================
-    // ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
-    // ==========================================
+    // КРУЖОЧКИ
     let mediaRecorderCircle = null;
     let circleChunks = [];
     let circleStream = null;
@@ -845,12 +802,12 @@
         mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
         mediaRecorderCircle.start();
       } catch (err) {
-        alert('Не удалось получить доступ к камере или микрофону');
+        alert('Доступ к камере/микрофону отклонен');
       }
     });
 
     document.getElementById('cancel-record-btn').addEventListener('click', () => {
-      if (mediaRecorderCircle) mediaRecorderCircle.stop();
+      if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') mediaRecorderCircle.stop();
       if (circleStream) circleStream.getTracks().forEach(t => t.stop());
       recordModal.classList.remove('active');
     });
@@ -877,10 +834,8 @@
       }
     });
 
-    // ==========================================
-    // ЗВОНКИ И УПРАВЛЕНИЕ МЕДИА (ЛИЧНЫЕ И ГРУППОВЫЕ WEBRTC)
-    // ==========================================
-    let peerConnections = {}; // Map: senderUid -> RTCPeerConnection
+    // WEBRTC ЗВОНКИ
+    let peerConnections = {};
     let localStream = null;
     let currentFacingMode = 'user';
     let incomingOfferData = null;
@@ -928,4 +883,126 @@
         localVideo.srcObject = localStream;
 
         Object.values(peerConnections).forEach(pc => {
-          const sender = pc.getSenders
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) sender.replaceTrack(newVideoTrack);
+        });
+      } catch (e) {
+        alert('Не удалось переключить камеру');
+      }
+    });
+
+    function createPeerConnection(remoteUid, remoteName) {
+      if (peerConnections[remoteUid]) return peerConnections[remoteUid];
+
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peerConnections[remoteUid] = pc;
+
+      if (localStream) {
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      }
+
+      pc.ontrack = (e) => {
+        let card = document.getElementById(`video-card-${remoteUid}`);
+        if (!card) {
+          card = document.createElement('div');
+          card.className = 'video-card';
+          card.id = `video-card-${remoteUid}`;
+
+          const remoteVid = document.createElement('video');
+          remoteVid.id = `remote-video-${remoteUid}`;
+          remoteVid.autoplay = true;
+          remoteVid.playsInline = true;
+
+          const label = document.createElement('div');
+          label.className = 'user-label';
+          label.textContent = remoteName || 'Участник';
+
+          card.appendChild(remoteVid);
+          card.appendChild(label);
+          videoGrid.appendChild(card);
+        }
+        const videoElem = document.getElementById(`remote-video-${remoteUid}`);
+        if (videoElem) videoElem.srcObject = e.streams[0];
+      };
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit('ice-candidate', {
+            targetUid: remoteUid,
+            candidate: e.candidate,
+            isGroup: isCurrentGroup
+          });
+        }
+      };
+
+      return pc;
+    }
+
+    document.getElementById('start-call-btn').addEventListener('click', async () => {
+      if (!currentChatUid) return;
+      callModal.classList.add('active');
+      document.getElementById('call-username').textContent = isCurrentGroup ? 'Групповой звонок...' : 'Звоним...';
+
+      localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
+      localVideo.srcObject = localStream;
+
+      const pc = createPeerConnection(currentChatUid, document.getElementById('active-chat-title').textContent);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit('call-user', {
+        senderUid: myProfile.uid,
+        targetUid: currentChatUid,
+        isGroup: isCurrentGroup,
+        offer
+      });
+    });
+
+    socket.on('incoming-call', async (data) => {
+      playCallSound();
+      incomingOfferData = data;
+      callModal.classList.add('active');
+      document.getElementById('call-username').textContent = data.isGroup 
+        ? `Вызов в группе от ${data.fromName}` 
+        : `Входящий звонок: ${data.fromName}`;
+      document.getElementById('accept-call-btn').style.display = 'inline-block';
+    });
+
+    document.getElementById('accept-call-btn').addEventListener('click', async () => {
+      stopCallSound();
+      document.getElementById('accept-call-btn').style.display = 'none';
+
+      if (!incomingOfferData) return;
+
+      localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
+      localVideo.srcObject = localStream;
+
+      const pc = createPeerConnection(incomingOfferData.fromUid, incomingOfferData.fromName);
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferData.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit('make-answer', {
+        targetUid: incomingOfferData.fromUid,
+        isGroup: incomingOfferData.isGroup,
+        answer
+      });
+    });
+
+    socket.on('call-answered', async (data) => {
+      stopCallSound();
+      const pc = peerConnections[data.fromUid] || peerConnections[currentChatUid];
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+      }
+    });
+
+    socket.on('ice-candidate', async (data) => {
+      const pc = peerConnections[data.fromUid] || peerConnections[currentChatUid];
+      if (pc && data.candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      }
+    });
+
+    document.getElementById('end-call-btn').addEventListener('click', endCall);
+    socket.on('call-ended',
