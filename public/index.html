@@ -96,7 +96,7 @@
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
     .msg-time { font-size: 10px; color: var(--text-muted); font-weight: normal; }
-    .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 0; }
+    .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; padding: 4px; }
 
     .video-circle {
       width: 180px; height: 180px; border-radius: 50%; object-fit: cover;
@@ -233,6 +233,7 @@
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
+          <button class="btn-icon" id="delete-chat-btn" title="Удалить этот чат" style="color: #ef4444;">🗑️</button>
           <button class="call-btn" id="start-call-btn">📞 Звонок</button>
         </div>
       </div>
@@ -289,9 +290,8 @@
   <script>
     const socket = io();
     let swRegistration = null;
-    let callTimeoutTimer = null; // Таймер ожидания звонка на 45 сек
+    let callTimeoutTimer = null;
 
-    // Регистрация Service Worker для Push-уведомлений с кнопкой «Ответить»
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
         swRegistration = reg;
@@ -323,7 +323,6 @@
       }
     }
 
-    // Хранилище IndexedDB для рингтона
     const dbReq = indexedDB.open("KhramMediaDB", 1);
     let db = null;
     dbReq.onupgradeneeded = e => {
@@ -513,13 +512,17 @@
       myGroups.forEach(g => {
         const div = document.createElement('div');
         div.className = 'chat-item dynamic-item';
-        div.addEventListener('click', () => openChat(g.id, g.name, '', true));
+        div.style.justifyContent = 'space-between';
+        
         div.innerHTML = `
-          <div class="chat-avatar" style="background:#f59e0b; color:#000;">👥</div>
-          <div>
-            <strong>${g.name}</strong>
-            <div style="font-size:12px; color:var(--text-muted);">Групповой чат</div>
+          <div style="display:flex; align-items:center; gap:12px; flex:1;" onclick="openChat('${g.id}', '${g.name}', '', true)">
+            <div class="chat-avatar" style="background:#f59e0b; color:#000;">👥</div>
+            <div>
+              <strong>${g.name}</strong>
+              <div style="font-size:12px; color:var(--text-muted);">Групповой чат</div>
+            </div>
           </div>
+          <button class="delete-btn" onclick="requestDeleteChat('${g.id}', true, event)">🗑️</button>
         `;
         chatList.appendChild(div);
       });
@@ -528,19 +531,70 @@
         const isOnline = activeOnlineUids.includes(c.uid);
         const div = document.createElement('div');
         div.className = 'chat-item dynamic-item';
-        div.addEventListener('click', () => openChat(c.uid, c.name, c.avatar, false));
+        div.style.justifyContent = 'space-between';
+
         div.innerHTML = `
-          <div class="chat-avatar">${c.avatar ? `<img src="${c.avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}</div>
-          <div>
-            <strong>${c.name}</strong>
-            <div style="font-size:12px; color:var(--text-muted);">
-              <span class="status-dot ${isOnline ? 'online' : ''}"></span>${isOnline ? 'Онлайн' : 'Офлайн'}
+          <div style="display:flex; align-items:center; gap:12px; flex:1;" onclick="openChat('${c.uid}', '${c.name}', '${c.avatar}', false)">
+            <div class="chat-avatar">${c.avatar ? `<img src="${c.avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}</div>
+            <div>
+              <strong>${c.name}</strong>
+              <div style="font-size:12px; color:var(--text-muted);">
+                <span class="status-dot ${isOnline ? 'online' : ''}"></span>${isOnline ? 'Онлайн' : 'Офлайн'}
+              </div>
             </div>
           </div>
+          <button class="delete-btn" onclick="requestDeleteChat('${c.uid}', false, event)">🗑️</button>
         `;
         chatList.appendChild(div);
       });
     }
+
+    function requestDeleteChat(chatId, isGroup, event) {
+      if (event) event.stopPropagation();
+
+      if (confirm('Вы уверены, что хотите удалить этот чат и его историю?')) {
+        socket.emit('delete-chat', { chatId, isGroup, userUid: myProfile.uid });
+        localStorage.removeItem(getHistoryKey(chatId));
+
+        if (isGroup) {
+          myGroups = myGroups.filter(g => g.id !== chatId);
+          localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+        } else {
+          contacts = contacts.filter(c => c.uid !== chatId);
+          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+        }
+
+        if (currentChatUid === chatId) {
+          closeChat();
+        }
+
+        renderContacts();
+      }
+    }
+
+    document.getElementById('delete-chat-btn').addEventListener('click', () => {
+      if (currentChatUid) {
+        requestDeleteChat(currentChatUid, isCurrentGroup);
+      }
+    });
+
+    socket.on('chat-deleted', (data) => {
+      localStorage.removeItem(getHistoryKey(data.chatId));
+
+      if (data.isGroup) {
+        myGroups = myGroups.filter(g => g.id !== data.chatId);
+        localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+      } else {
+        contacts = contacts.filter(c => c.uid !== data.chatId);
+        localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+      }
+
+      if (currentChatUid === data.chatId) {
+        closeChat();
+      }
+
+      renderContacts();
+    });
 
     document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', '', false));
 
@@ -766,7 +820,6 @@
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
-    // Отправка файлов / фото
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -787,7 +840,6 @@
       reader.readAsDataURL(file);
     });
 
-    // Голосовые сообщения
     let audioRecorder, audioChunks = [], isAudioRecording = false;
     const recAudioBtn = document.getElementById('record-audio-btn');
 
@@ -828,7 +880,6 @@
       }
     });
 
-    // Кружочки
     let circleStream, circleRecorder, circleChunks = [];
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
@@ -874,7 +925,6 @@
       recordModal.style.display = 'none';
     });
 
-    // WebRTC Звонки (ФИКС: правильный обмен SDP и ICE через UID)
     let peerConnection, localStream;
     let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
@@ -951,7 +1001,6 @@
 
       peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
       
-      // Отправляем кандидатов через targetUid
       peerConnection.onicecandidate = e => { 
         if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate }); 
       };
@@ -972,7 +1021,7 @@
       sendCallNotification(data.fromName || 'Собеседник', data.fromAvatar);
 
       window.incomingOffer = data.offer;
-      window.callerUid = data.fromUid; // Сохраняем UID звонящего
+      window.callerUid = data.fromUid;
       startCallTimeout();
     });
 
@@ -987,7 +1036,6 @@
 
       peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
       
-      // Отправляем кандидатов звонящему через его targetUid
       peerConnection.onicecandidate = e => { 
         if (e.candidate) socket.emit('ice-candidate', { targetUid: window.callerUid, candidate: e.candidate }); 
       };
@@ -996,7 +1044,6 @@
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
-      // Отправляем ответ с использованием targetUid
       socket.emit('make-answer', { targetUid: window.callerUid, answer });
     }
 
@@ -1042,4 +1089,4 @@
     renderContacts();
   </script>
 </body>
-  </html>
+          </html>
