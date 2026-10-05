@@ -1,79 +1,280 @@
 const express = require('express');
+const http = require('http');
 const path = require('path');
+const { Server } = require('socket.io');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http, {
+const server = http.createServer(app);
+
+// Лимиты для передаваемых больших файлов/данных
+app.use(express.json({ limit: '70gb' }));
+app.use(express.urlencoded({ limit: '70gb', extended: true }));
+
+const io = new Server(server, {
+  maxHttpBufferSize: 1e9,
   cors: { origin: "*" }
 });
 
-// Раздача статических файлов из директории проекта
-app.use(express.static(__dirname));
+// Раздача статики из папки public
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Маршрут для главной страницы — гарантирует отдачу index.html
+// Явный маршрут для отдачи index.html из папки public
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-let users = {}; // uid -> socket.id
+const registeredUsers = new Map();
+const socketToUid = new Map();
+const groups = new Map();
+
+function broadcastOnlineUsers() {
+  const onlineUids = Array.from(socketToUid.values());
+  io.emit('online-users-list', Array.from(new Set(onlineUids)));
+}
+
+// Надежная очистка номера: оставляет только 10 последних цифр
+function cleanPhone(phoneStr) {
+  if (!phoneStr) return '';
+  const digits = String(phoneStr).replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
 
 io.on('connection', (socket) => {
+
+  // Регистрация и обновление профиля
   socket.on('register', (user) => {
-    socket.uid = user.uid;
-    users[user.uid] = socket.id;
-    io.emit('online-users-list', Object.keys(users));
+    if (!user || !user.uid) return;
+
+    socketToUid.set(socket.id, user.uid);
+
+    let userData = registeredUsers.get(user.uid) || { socketIds: new Set() };
+    userData.uid = user.uid;
+    userData.username = user.username || 'Путник';
+    userData.avatar = user.avatar || '';
+    userData.phoneRaw = user.phone || ''; // Исходный номер
+    userData.phoneClean = cleanPhone(user.phone); // Очищенный номер для поиска
+
+    if (!userData.socketIds) userData.socketIds = new Set();
+    userData.socketIds.add(socket.id);
+
+    registeredUsers.set(user.uid, userData);
+    
+    socket.join(user.uid);
+
+    groups.forEach((g) => {
+      if (g.members.has(user.uid)) {
+        socket.join(g.id);
+      }
+    });
+
+    broadcastOnlineUsers();
+
+    io.emit('user-profile-updated', {
+      uid: userData.uid,
+      username: userData.username,
+      avatar: userData.avatar,
+      phone: userData.phoneRaw
+    });
   });
 
-  socket.on('join-group-room', (groupId) => {
-    socket.join(groupId);
+  // ИСПРАВЛЕННЫЙ ПОИСК КОНТАКТОВ ПО НОМЕРАМ
+  socket.on('sync-contacts', (phoneNumbers) => {
+    if (!Array.isArray(phoneNumbers)) return;
+
+    // Приводим все входящие номера к 10 цифрам
+    const searchPhonesClean = phoneNumbers
+      .map(p => cleanPhone(p))
+      .filter(p => p.length >= 7); // Пропускаем совсем короткие строки
+
+    const matchedUsers = [];
+
+    registeredUsers.forEach((u) => {
+      if (u.phoneClean) {
+        // Если хотя бы одна совпавшая комбинация цифр найдена
+        if (searchPhonesClean.includes(u.phoneClean)) {
+          matchedUsers.push({
+            uid: u.uid,
+            name: u.username,
+            avatar: u.avatar,
+            phone: u.phoneRaw
+          });
+        }
+      }
+    });
+
+    // Возвращаем результат поиска обратно клиенту
+    socket.emit('contacts-synced', matchedUsers);
   });
 
-  socket.on('chat message', (data) => {
-    if (data.isGroup) {
-      io.to(data.targetUid).emit('chat message', data);
-    } else {
-      const targetSocketId = users[data.targetUid];
-      if (targetSocketId) io.to(targetSocketId).emit('chat message', data);
-      socket.emit('chat message', data);
+  socket.on('create-group', ({ name, members, ownerUid }) => {
+    const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const membersSet = new Set(members);
+    membersSet.add(ownerUid);
+
+    const newGroup = {
+      id: groupId,
+      name: name || 'Новая Группа',
+      ownerUid: ownerUid,
+      admins: new Set([ownerUid]),
+      members: membersSet,
+      bgImage: ''
+    };
+
+    groups.set(groupId, newGroup);
+
+    membersSet.forEach(mUid => {
+      const u = registeredUsers.get(mUid);
+      if (u) {
+        u.socketIds.forEach(sId => {
+          const clientSocket = io.sockets.sockets.get(sId);
+          if (clientSocket) clientSocket.join(groupId);
+        });
+      }
+      
+      io.to(mUid).emit('group-created', {
+        id: newGroup.id,
+        name: newGroup.name,
+        ownerUid: newGroup.ownerUid,
+        admins: Array.from(newGroup.admins),
+        members: Array.from(newGroup.members),
+        bgImage: newGroup.bgImage
+      });
+    });
+  });
+
+  socket.on('update-group-bg', ({ groupId, bgImage, userUid }) => {
+    const g = groups.get(groupId);
+    if (g && (g.ownerUid === userUid || g.admins.has(userUid))) {
+      g.bgImage = bgImage;
+      io.to(groupId).emit('group-bg-updated', { groupId, bgImage });
     }
   });
 
-  socket.on('create-group', (group) => {
-    io.emit('group-created', group);
+  socket.on('chat message', (data) => {
+    const sender = registeredUsers.get(data.senderUid) || {
+      uid: data.senderUid,
+      username: 'Пользователь',
+      avatar: ''
+    };
+
+    const msgPayload = {
+      id: data.id || Date.now() + Math.random(),
+      senderUid: sender.uid,
+      senderName: sender.username,
+      senderAvatar: sender.avatar,
+      targetUid: data.targetUid,
+      isGroup: data.isGroup || false,
+      type: data.type || 'text',
+      content: data.content || '',
+      fileName: data.fileName || '',
+      fileSize: data.fileSize || 0,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('chat message', msgPayload);
+      return;
+    }
+
+    if (data.targetUid === 'bot-assistant') {
+      socket.emit('chat message', msgPayload);
+      setTimeout(() => {
+        socket.emit('chat message', {
+          id: Date.now() + 1,
+          senderUid: 'bot-assistant',
+          senderName: 'ИИ Помощник 🤖',
+          targetUid: sender.uid,
+          type: 'text',
+          content: `🤖 Получил ваше сообщение: "${data.content || '['+data.type+']'}"`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      }, 500);
+      return;
+    }
+
+    io.to(sender.uid).emit('chat message', msgPayload);
+    io.to(data.targetUid).emit('chat message', msgPayload);
+  });
+
+  socket.on('delete message', (data) => {
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
+    } else {
+      io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
+      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
+    }
+  });
+
+  socket.on('delete-chat', ({ chatId, isGroup, userUid }) => {
+    if (isGroup) {
+      groups.delete(chatId);
+      io.to(chatId).emit('chat-deleted', { chatId, isGroup: true });
+    } else {
+      io.to(userUid).emit('chat-deleted', { chatId, isGroup: false });
+      io.to(chatId).emit('chat-deleted', { chatId, isGroup: false });
+    }
   });
 
   socket.on('call-user', (data) => {
+    const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
-      socket.to(data.targetUid).emit('incoming-call', data);
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: data.senderUid,
+        fromName: sender ? sender.username : 'Собеседник',
+        fromAvatar: sender ? sender.avatar : '',
+        offer: data.offer,
+        isGroup: true,
+        groupId: data.targetUid
+      });
     } else {
-      const targetSocketId = users[data.targetUid];
-      if (targetSocketId) io.to(targetSocketId).emit('incoming-call', data);
+      io.to(data.targetUid).emit('incoming-call', {
+        fromUid: data.senderUid,
+        fromName: sender ? sender.username : 'Собеседник',
+        fromAvatar: sender ? sender.avatar : '',
+        offer: data.offer,
+        isGroup: false
+      });
     }
   });
 
   socket.on('make-answer', (data) => {
-    const targetSocketId = users[data.targetUid];
-    if (targetSocketId) io.to(targetSocketId).emit('call-answered', data);
+    if (data.targetUid) {
+      io.to(data.targetUid).emit('call-answered', {
+        answer: data.answer,
+        fromUid: socketToUid.get(socket.id)
+      });
+    }
   });
 
   socket.on('ice-candidate', (data) => {
-    const targetSocketId = users[data.targetUid];
-    if (targetSocketId) io.to(targetSocketId).emit('ice-candidate', data);
+    if (data.targetUid) {
+      io.to(data.targetUid).emit('ice-candidate', { candidate: data.candidate });
+    }
   });
 
   socket.on('end-call', (data) => {
     if (data.targetUid) {
-      const targetSocketId = users[data.targetUid];
-      if (targetSocketId) io.to(targetSocketId).emit('call-ended');
+      io.to(data.targetUid).emit('call-ended', { reason: data.reason || 'ended' });
     }
   });
 
   socket.on('disconnect', () => {
-    if (socket.uid) delete users[socket.uid];
-    io.emit('online-users-list', Object.keys(users));
+    const uid = socketToUid.get(socket.id);
+    if (uid && registeredUsers.has(uid)) {
+      const u = registeredUsers.get(uid);
+      if (u.socketIds) u.socketIds.delete(socket.id);
+    }
+    socketToUid.delete(socket.id);
+    broadcastOnlineUsers();
   });
 });
 
+// Страховка для SPA: любые другие запросы отправляем на public/index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер Храм запущен на порту ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Сервер Храма запущен на порту ${PORT}`);
 });
