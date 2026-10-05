@@ -23,7 +23,7 @@
       --text-main: #1f2937;
       --text-muted: #6b7280;
       --msg-mine-bg: #dbeafe;
-      --msg-other-bg: #f3f4f6;
+      --msg-other-bg: #ffffff;
     }
 
     * { box-sizing: border-box; }
@@ -42,7 +42,7 @@
       justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);
     }
     .brand { display: flex; align-items: center; gap: 8px; }
-    .brand h1 { margin: 0; font-size: 18px; color: var(--brand-color); font-weight: bold; letter-spacing: 2px; }
+    .brand h1 { margin: 0; font-size: 18px; color: var(--brand-color); font-weight: bold; letter-spacing: 2px; transition: color 0.3s; }
 
     .nav-tabs { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); }
     .tab-btn {
@@ -90,13 +90,14 @@
     .msg.mine { align-self: flex-end; background: var(--msg-mine-bg); border: 1px solid var(--border-color); }
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
-    .msg-time { font-size: 10px; color: var(--text-muted); font-weight: normal; }
-    .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; padding: 4px; }
 
+    /* Кружочки */
     .video-circle {
-      width: 180px; height: 180px; border-radius: 50%; object-fit: cover;
+      width: 160px; height: 160px; border-radius: 50%; object-fit: cover;
       border: 3px solid var(--brand-color); margin-top: 4px; display: block;
+      cursor: pointer; transition: transform 0.2s;
     }
+    .video-circle:active { transform: scale(0.96); }
 
     #controls { background: var(--bg-panel); padding: 8px; border-top: 1px solid var(--border-color); }
     .input-row { display: flex; align-items: center; gap: 6px; }
@@ -115,7 +116,7 @@
     /* Модальные окна */
     .modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.8); z-index: 1000; flex-direction: column;
+      background: rgba(0,0,0,0.85); z-index: 1000; flex-direction: column;
       align-items: center; justify-content: center; padding: 20px;
     }
     .modal.active { display: flex; }
@@ -125,6 +126,19 @@
       display: flex; flex-direction: column; gap: 12px;
     }
 
+    /* Модалка просмотра кружка (Telegram Style) */
+    #circle-modal {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.9); z-index: 2000; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #circle-modal.active { display: flex; }
+    #circle-modal-video {
+      width: 300px; height: 300px; border-radius: 50%; object-fit: cover;
+      border: 4px solid var(--brand-color); box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    }
+
+    /* Модалка звонка */
     #call-modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0d1117;
       flex-direction: column; align-items: center; justify-content: space-between; padding: 20px 10px; z-index: 1000;
@@ -136,6 +150,7 @@
     
     .call-controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
     .call-btn { background: #22c55e; border: none; color: white; padding: 10px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .call-btn.off { background: #4b5563; }
     .call-btn.danger { background: #ef4444; }
 
     #record-modal {
@@ -166,7 +181,7 @@
       <button class="tab-btn" id="tab-btn-settings">Настройки</button>
     </div>
 
-    <!-- Чаты -->
+    <!-- Вкладка: Чаты -->
     <div id="chats-page" class="page active">
       <div id="chat-list">
         <div class="chat-item" id="bot-chat-item">
@@ -179,7 +194,7 @@
       </div>
     </div>
 
-    <!-- Профиль -->
+    <!-- Вкладка: Профиль -->
     <div id="profile-page" class="page">
       <div class="profile-card">
         <div id="avatar-display" class="avatar-preview">👤</div>
@@ -205,7 +220,7 @@
       </div>
     </div>
 
-    <!-- Настройки -->
+    <!-- Вкладка: Настройки -->
     <div id="settings-page" class="page">
       <div class="profile-card">
         <h3>🎨 Тема оформления</h3>
@@ -225,7 +240,7 @@
       </div>
     </div>
 
-    <!-- Чат окно -->
+    <!-- Окно чата -->
     <div id="chat-window-modal" class="page">
       <div id="chat-header" style="background:var(--bg-panel); padding:8px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
         <button class="btn-icon" id="close-chat-btn">←</button>
@@ -238,7 +253,7 @@
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
-          <button class="btn-icon" id="delete-chat-btn" title="Удалить этот чат" style="color: #ef4444;">🗑️</button>
+          <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑️</button>
           <button class="call-btn" id="start-call-btn">📞 Звонок</button>
         </div>
       </div>
@@ -257,6 +272,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Модалка просмотра видеокружочка (увеличение + звук) -->
+  <div id="circle-modal" onclick="closeCircleModal()">
+    <video id="circle-modal-video" autoplay playsinline></video>
   </div>
 
   <!-- Модалка создания группы -->
@@ -286,7 +306,7 @@
     </div>
   </div>
 
-  <!-- Окно звонка -->
+  <!-- Окно звонка с кнопками микрофона/камеры -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👤</div>
@@ -299,6 +319,9 @@
     </div>
 
     <div class="call-controls">
+      <button id="toggle-mic-btn" class="call-btn">🎤 Вкл</button>
+      <button id="toggle-cam-btn" class="call-btn">📷 Вкл</button>
+      <button id="switch-cam-btn" class="call-btn">🔄 Камера</button>
       <button id="accept-call-btn" class="call-btn" style="display:none;">Ответить</button>
       <button id="end-call-btn" class="call-btn danger">Завершить</button>
     </div>
@@ -366,7 +389,40 @@
     });
 
     // ==========================================
-    // 1. ПОИСК ПОЛЬЗОВАТЕЛЕЙ
+    // 1. НАСТРОЙКИ ТЕМЫ И ЦВЕТА
+    // ==========================================
+    const themeSelect = document.getElementById('theme-select');
+    const brandColorSelect = document.getElementById('brand-color-select');
+    const brandTitle = document.getElementById('brand-title');
+
+    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
+    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
+
+    function applyTheme(theme) {
+      if (theme === 'light') {
+        document.body.classList.add('light-theme');
+      } else {
+        document.body.classList.remove('light-theme');
+      }
+      themeSelect.value = theme;
+      localStorage.setItem('khram_theme', theme);
+    }
+
+    function applyBrandColor(color) {
+      document.documentElement.style.setProperty('--brand-color', color);
+      brandTitle.style.color = color;
+      brandColorSelect.value = color;
+      localStorage.setItem('khram_brand_color', color);
+    }
+
+    applyTheme(savedTheme);
+    applyBrandColor(savedBrandColor);
+
+    themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
+    brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
+
+    // ==========================================
+    // 2. ПОИСК ПОЛЬЗОВАТЕЛЕЙ
     // ==========================================
     document.getElementById('sync-sim-btn').addEventListener('click', async () => {
       let extractedPhones = [];
@@ -433,7 +489,7 @@
         div.className = 'chat-item dynamic-item';
         div.innerHTML = `
           <div style="display:flex; align-items:center; gap:12px; flex:1;" onclick="openChat('${g.id}', '${g.name}', '', true)">
-            <div class="chat-avatar" style="background:#f59e0b; color:#000;">👥</div>
+            <div class="chat-avatar" style="background:var(--brand-color); color:#000;">👥</div>
             <div><strong>${g.name}</strong><div style="font-size:12px; color:var(--text-muted);">Группа</div></div>
           </div>
         `;
@@ -458,7 +514,49 @@
     }
 
     // ==========================================
-    // 2. СОЗДАНИЕ ГРУППЫ
+    // 3. УДАЛЕНИЕ ЧАТА
+    // ==========================================
+    document.getElementById('delete-chat-btn').addEventListener('click', () => {
+      if (!currentChatUid) return;
+      if (confirm('Вы уверены, что хотите удалить этот чат и всю историю сообщений?')) {
+        localStorage.removeItem(getHistoryKey(currentChatUid));
+        localStorage.removeItem(`chat_bg_${currentChatUid}`);
+
+        if (isCurrentGroup) {
+          myGroups = myGroups.filter(g => g.id !== currentChatUid);
+          localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+        } else {
+          contacts = contacts.filter(c => c.uid !== currentChatUid);
+          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+        }
+
+        renderContacts();
+        document.getElementById('close-chat-btn').click();
+      }
+    });
+
+    // ==========================================
+    // 4. УВЕЛИЧЕНИЕ КРУЖКА (TELEGRAM STYLE)
+    // ==========================================
+    function playCircleModal(src) {
+      const circleModal = document.getElementById('circle-modal');
+      const video = document.getElementById('circle-modal-video');
+      video.src = src;
+      video.muted = false;
+      circleModal.classList.add('active');
+      video.play().catch(() => {});
+    }
+
+    function closeCircleModal() {
+      const circleModal = document.getElementById('circle-modal');
+      const video = document.getElementById('circle-modal-video');
+      video.pause();
+      video.src = '';
+      circleModal.classList.remove('active');
+    }
+
+    // ==========================================
+    // 5. СОЗДАНИЕ ГРУППЫ
     // ==========================================
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
@@ -496,7 +594,7 @@
     });
 
     // ==========================================
-    // 3. ФОН ЧАТА
+    // 6. ФОН ЧАТА
     // ==========================================
     const bgModal = document.getElementById('bg-modal');
     document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
@@ -525,7 +623,7 @@
     });
 
     // ==========================================
-    // 4. ГОЛОСОВЫЕ СООБЩЕНИЯ
+    // 7. ГОЛОСОВЫЕ СООБЩЕНИЯ
     // ==========================================
     let mediaRecorderAudio = null;
     let audioChunks = [];
@@ -568,7 +666,7 @@
     });
 
     // ==========================================
-    // 5. ВИДЕОКРУЖОЧКИ
+    // 8. ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
     // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
@@ -578,7 +676,7 @@
 
     document.getElementById('record-circle-btn').addEventListener('click', async () => {
       try {
-        circleStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
         circlePreview.srcObject = circleStream;
         recordModal.classList.add('active');
 
@@ -621,20 +719,68 @@
     });
 
     // ==========================================
-    // 6. ЗВОНКИ (WebRTC)
+    // 9. ЗВОНКИ И УПРАВЛЕНИЕ МЕДИА (WebRTC)
     // ==========================================
     let peerConnection = null;
     let localStream = null;
+    let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
     const localVideo = document.getElementById('local-video');
     const remoteVideo = document.getElementById('remote-video');
+
+    const toggleMicBtn = document.getElementById('toggle-mic-btn');
+    const toggleCamBtn = document.getElementById('toggle-cam-btn');
+
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          toggleMicBtn.textContent = audioTrack.enabled ? '🎤 Вкл' : '🎤 Выкл';
+          toggleMicBtn.classList.toggle('off', !audioTrack.enabled);
+        }
+      }
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          toggleCamBtn.textContent = videoTrack.enabled ? '📷 Вкл' : '📷 Выкл';
+          toggleCamBtn.classList.toggle('off', !videoTrack.enabled);
+        }
+      }
+    });
+
+    document.getElementById('switch-cam-btn').addEventListener('click', async () => {
+      if (!localStream) return;
+      currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+
+      localStream.getVideoTracks().forEach(t => t.stop());
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+
+        localStream.removeTrack(localStream.getVideoTracks()[0]);
+        localStream.addTrack(newVideoTrack);
+        localVideo.srcObject = localStream;
+
+        if (peerConnection) {
+          const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) sender.replaceTrack(newVideoTrack);
+        }
+      } catch (e) {
+        alert('Не удалось переключить камеру');
+      }
+    });
 
     document.getElementById('start-call-btn').addEventListener('click', async () => {
       if (!currentChatUid || isCurrentGroup) return alert('Звонки доступны только в личных чатах');
       callModal.classList.add('active');
       document.getElementById('call-username').textContent = 'Звоним...';
 
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
       localVideo.srcObject = localStream;
 
       peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
@@ -658,7 +804,7 @@
 
       document.getElementById('accept-call-btn').onclick = async () => {
         document.getElementById('accept-call-btn').style.display = 'none';
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
         localVideo.srcObject = localStream;
 
         peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
@@ -698,7 +844,7 @@
     }
 
     // ==========================================
-    // ВЫБОР ВкладОК И ОБЩАЯ ЛОГИКА
+    // Вкладки и общая логика
     // ==========================================
     function switchTab(pageId, targetBtn) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -767,10 +913,15 @@
       div.innerHTML = `<div class="msg-header">${isMine ? 'Вы' : (data.senderName || 'Собеседник')}</div>`;
       const contentBox = document.createElement('div');
 
-      if (data.type === 'text') contentBox.textContent = data.content;
-      else if (data.type === 'audio') contentBox.innerHTML = `<audio src="${data.content}" controls></audio>`;
-      else if (data.type === 'circle') contentBox.innerHTML = `<video src="${data.content}" controls class="video-circle"></video>`;
-      else if (data.type === 'file') contentBox.innerHTML = `<a href="${data.content}" download="${data.fileName}">📁 ${data.fileName}</a>`;
+      if (data.type === 'text') {
+        contentBox.textContent = data.content;
+      } else if (data.type === 'audio') {
+        contentBox.innerHTML = `<audio src="${data.content}" controls></audio>`;
+      } else if (data.type === 'circle') {
+        contentBox.innerHTML = `<video src="${data.content}" class="video-circle" muted loop playsinline onclick="playCircleModal('${data.content}')"></video>`;
+      } else if (data.type === 'file') {
+        contentBox.innerHTML = `<a href="${data.content}" download="${data.fileName}" style="color:var(--brand-color);">📁 ${data.fileName}</a>`;
+      }
 
       div.appendChild(contentBox);
       const messagesDiv = document.getElementById('messages');
@@ -828,4 +979,4 @@
     renderContacts();
   </script>
 </body>
-              </html>
+        </html>
