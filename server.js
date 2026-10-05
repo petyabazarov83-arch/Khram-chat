@@ -5,14 +5,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // Лимит 100 МБ
+  maxHttpBufferSize: 1e8 // 100 МБ
 });
 
 app.use(express.static('public'));
 
-// Хранилище зарегистрированных пользователей: uid -> { uid, username, avatar, phone, socketIds: Set }
 const registeredUsers = new Map();
 const socketToUid = new Map();
+const groups = new Map(); // groupId -> { id, name, ownerUid, admins: Set, members: Set, bgImage: string }
 
 function broadcastOnlineUsers() {
   const onlineUids = Array.from(socketToUid.values());
@@ -21,7 +21,6 @@ function broadcastOnlineUsers() {
 
 io.on('connection', (socket) => {
 
-  // Регистрация профиля на сервере
   socket.on('register', (user) => {
     if (!user || !user.uid) return;
 
@@ -35,11 +34,17 @@ io.on('connection', (socket) => {
     userData.socketIds.add(socket.id);
 
     registeredUsers.set(user.uid, userData);
-
     socket.join(user.uid);
+
+    // Подключаем пользователя ко всем его группам
+    groups.forEach((g) => {
+      if (g.members.has(user.uid)) {
+        socket.join(g.id);
+      }
+    });
+
     broadcastOnlineUsers();
 
-    // Рассылаем обновившийся профиль всем для синхронизации
     io.emit('user-profile-updated', {
       uid: userData.uid,
       username: userData.username,
@@ -47,7 +52,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Синхронизация контактов с SIM/телефона
   socket.on('sync-contacts', (phoneNumbers) => {
     if (!Array.isArray(phoneNumbers)) return;
 
@@ -68,7 +72,51 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedUsers);
   });
 
-  // Отправка сообщений
+  // Управление группами
+  socket.on('create-group', ({ name, members, ownerUid }) => {
+    const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const membersSet = new Set(members);
+    membersSet.add(ownerUid);
+
+    const newGroup = {
+      id: groupId,
+      name: name || 'Новая Группа',
+      ownerUid: ownerUid,
+      admins: new Set([ownerUid]),
+      members: membersSet,
+      bgImage: ''
+    };
+
+    groups.set(groupId, newGroup);
+
+    membersSet.forEach(mUid => {
+      const u = registeredUsers.get(mUid);
+      if (u) {
+        u.socketIds.forEach(sId => {
+          const clientSocket = io.sockets.sockets.get(sId);
+          if (clientSocket) clientSocket.join(groupId);
+        });
+      }
+    });
+
+    io.to(groupId).emit('group-created', {
+      id: newGroup.id,
+      name: newGroup.name,
+      ownerUid: newGroup.ownerUid,
+      admins: Array.from(newGroup.admins),
+      members: Array.from(newGroup.members),
+      bgImage: newGroup.bgImage
+    });
+  });
+
+  socket.on('update-group-bg', ({ groupId, bgImage, userUid }) => {
+    const g = groups.get(groupId);
+    if (g && (g.ownerUid === userUid || g.admins.has(userUid))) {
+      g.bgImage = bgImage;
+      io.to(groupId).emit('group-bg-updated', { groupId, bgImage });
+    }
+  });
+
   socket.on('chat message', (data) => {
     const sender = registeredUsers.get(data.senderUid) || {
       uid: data.senderUid,
@@ -82,6 +130,7 @@ io.on('connection', (socket) => {
       senderName: sender.username,
       senderAvatar: sender.avatar,
       targetUid: data.targetUid,
+      isGroup: data.isGroup || false,
       type: data.type,
       content: data.content,
       fileName: data.fileName,
@@ -89,7 +138,11 @@ io.on('connection', (socket) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Бот-помощник
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('chat message', msgPayload);
+      return;
+    }
+
     if (data.targetUid === 'bot-assistant') {
       socket.emit('chat message', msgPayload);
       setTimeout(() => {
@@ -99,7 +152,7 @@ io.on('connection', (socket) => {
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
           type: 'text',
-          content: `🤖 Ответ бота на: "${data.content}"`,
+          content: `🤖 Ответ на: "${data.content}"`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
@@ -110,22 +163,38 @@ io.on('connection', (socket) => {
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
 
-  // Удаление сообщений
   socket.on('delete message', (data) => {
-    io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
-    io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
+    } else {
+      io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
+      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
+    }
   });
 
   // WebRTC Сигналинг звонков
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
-    io.to(data.targetUid).emit('incoming-call', {
-      fromUid: data.senderUid,
-      fromName: sender ? sender.username : 'Собеседник',
-      fromAvatar: sender ? sender.avatar : '',
-      fromSocketId: socket.id,
-      offer: data.offer
-    });
+    if (data.isGroup) {
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: data.senderUid,
+        fromName: sender ? sender.username : 'Собеседник',
+        fromAvatar: sender ? sender.avatar : '',
+        fromSocketId: socket.id,
+        offer: data.offer,
+        isGroup: true,
+        groupId: data.targetUid
+      });
+    } else {
+      io.to(data.targetUid).emit('incoming-call', {
+        fromUid: data.senderUid,
+        fromName: sender ? sender.username : 'Собеседник',
+        fromAvatar: sender ? sender.avatar : '',
+        fromSocketId: socket.id,
+        offer: data.offer,
+        isGroup: false
+      });
+    }
   });
 
   socket.on('make-answer', (data) => {
