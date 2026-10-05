@@ -68,7 +68,7 @@ io.on('connection', (socket) => {
 
     // Подключаем сокет ко всем группам, членом которых является пользователь
     groups.forEach((g) => {
-      if (g.members && g.members.has(user.uid)) {
+      if (g.members && (g.members.has(user.uid) || Array.from(g.members).includes(user.uid))) {
         socket.join(g.id);
       }
     });
@@ -153,7 +153,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Отправка сообщений, файлов и медиа
+  // Отправка сообщений, файлов и медиа (ИСПРАВЛЕНО ДОСТАВЛЕНИЕ)
   socket.on('chat message', (data) => {
     if (!data) return;
 
@@ -178,6 +178,7 @@ io.on('connection', (socket) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    // Если сообщение в группу
     if (data.isGroup) {
       io.to(data.targetUid).emit('chat message', msgPayload);
       return;
@@ -192,14 +193,16 @@ io.on('connection', (socket) => {
           senderUid: 'bot-assistant',
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
+          isGroup: false,
           type: 'text',
-          content: `🤖 Принято в Храме! Файл/Сообщение "${data.fileName || data.content || 'Файл'}" успешно обработано.`,
+          content: `🤖 Принято в Храме! Сообщение "${data.fileName || data.content || 'Файл'}" успешно обработано.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 400);
       return;
     }
 
+    // Рассылка личного сообщения обоим участникам (отправителю и получателю)
     io.to(sender.uid).emit('chat message', msgPayload);
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
