@@ -5,12 +5,11 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Поддержка передачи гигантских файлов и медиаданных
 app.use(express.json({ limit: '70gb' }));
 app.use(express.urlencoded({ limit: '70gb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 1e9, // 1 ГБ для сокетов
+  maxHttpBufferSize: 1e9,
   cors: { origin: "*" }
 });
 
@@ -25,7 +24,7 @@ function broadcastOnlineUsers() {
   io.emit('online-users-list', Array.from(new Set(onlineUids)));
 }
 
-// Вспомогательная функция для получения последних 10 цифр номера (без +7/8)
+// Нормализация номера до 10 последних цифр
 function normalizePhone10(phoneStr) {
   if (!phoneStr) return '';
   const digits = String(phoneStr).replace(/\D/g, '');
@@ -43,12 +42,11 @@ io.on('connection', (socket) => {
     userData.uid = user.uid;
     userData.username = user.username || 'Путник';
     userData.avatar = user.avatar || '';
-    userData.phone = user.phone ? String(user.phone).replace(/\D/g, '') : '';
+    userData.phone = normalizePhone10(user.phone);
     userData.socketIds.add(socket.id);
 
     registeredUsers.set(user.uid, userData);
     
-    // Подключаем сокет к комнате с его собственным UID
     socket.join(user.uid);
 
     groups.forEach((g) => {
@@ -66,11 +64,10 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ИСПРАВЛЕННЫЙ ПОИСК И СИНХРОНИЗАЦИЯ ПО НОМЕРУ ТЕЛЕФОНА
+  // ТОЧНЫЙ ПОИСК И ПОДКЛЮЧЕНИЕ ЧАТОВ ПО НОМЕРАМ
   socket.on('sync-contacts', (phoneNumbers) => {
     if (!Array.isArray(phoneNumbers)) return;
 
-    // Нормализуем входящие номера до последних 10 цифр
     const searchPhones10 = phoneNumbers
       .map(p => normalizePhone10(p))
       .filter(Boolean);
@@ -91,6 +88,7 @@ io.on('connection', (socket) => {
       }
     });
 
+    // Возвращаем найденных пользователей текущему сокету
     socket.emit('contacts-synced', matchedUsers);
   });
 
@@ -193,7 +191,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // УДАЛЕНИЕ ЧАТА
   socket.on('delete-chat', ({ chatId, isGroup, userUid }) => {
     if (isGroup) {
       groups.delete(chatId);
@@ -204,7 +201,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // WEBRTC ЗВОНКИ
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
