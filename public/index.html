@@ -5,10 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Храм</title>
   <style>
+    :root {
+      --bg-main: #0b0e14;
+      --bg-panel: #161b22;
+      --border-color: #30363d;
+      --text-main: #e6edf3;
+      --text-muted: #8b949e;
+      --brand-color: #f59e0b;
+      --msg-mine-bg: #27272a;
+      --msg-other-bg: #1e293b;
+    }
+
+    body.light-theme {
+      --bg-main: #f3f4f6;
+      --bg-panel: #ffffff;
+      --border-color: #e5e7eb;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --msg-mine-bg: #dbeafe;
+      --msg-other-bg: #f3f4f6;
+    }
+
     * { box-sizing: border-box; }
     html, body {
-      background-color: #0b0e14;
-      color: #e6edf3;
+      background-color: var(--bg-main);
+      color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       margin: 0; padding: 0;
       height: 100%; width: 100%;
@@ -17,18 +38,18 @@
     #app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; }
 
     header {
-      background: #161b22; padding: 10px 16px; display: flex;
-      justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d;
+      background: var(--bg-panel); padding: 10px 16px; display: flex;
+      justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);
     }
     .brand { display: flex; align-items: center; gap: 8px; }
-    .brand h1 { margin: 0; font-size: 18px; color: #f59e0b; font-weight: bold; letter-spacing: 2px; }
+    .brand h1 { margin: 0; font-size: 18px; color: var(--brand-color); font-weight: bold; letter-spacing: 2px; }
 
-    .nav-tabs { display: flex; background: #161b22; border-bottom: 1px solid #30363d; }
+    .nav-tabs { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border-color); }
     .tab-btn {
       flex: 1; padding: 12px; background: none; border: none;
-      color: #8b949e; font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent;
+      color: var(--text-muted); font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent;
     }
-    .tab-btn.active { color: #f59e0b; border-bottom-color: #f59e0b; }
+    .tab-btn.active { color: var(--brand-color); border-bottom-color: var(--brand-color); }
 
     .page { display: none; flex: 1; flex-direction: column; overflow: hidden; }
     .page.active { display: flex; }
@@ -38,50 +59,57 @@
     }
     .avatar-preview {
       width: 90px; height: 90px; border-radius: 50%; object-fit: cover;
-      background: #1f6beb; border: 3px solid #f59e0b; display: flex;
+      background: #1f6beb; border: 3px solid var(--brand-color); display: flex;
       align-items: center; justify-content: center; font-size: 36px; color: #fff; overflow: hidden;
     }
     .input-field {
-      width: 100%; max-width: 320px; padding: 10px 14px; background: #161b22;
-      border: 1px solid #30363d; border-radius: 8px; color: #fff; font-size: 14px; outline: none;
+      width: 100%; max-width: 320px; padding: 10px 14px; background: var(--bg-panel);
+      border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-size: 14px; outline: none;
     }
     .uid-box {
-      background: #161b22; border: 1px solid #30363d; padding: 10px 14px;
-      border-radius: 8px; font-family: monospace; color: #f59e0b; width: 100%; max-width: 320px; text-align: center;
+      background: var(--bg-panel); border: 1px solid var(--border-color); padding: 10px 14px;
+      border-radius: 8px; font-family: monospace; color: var(--brand-color); width: 100%; max-width: 320px; text-align: center;
     }
 
     #chat-list { flex: 1; overflow-y: auto; }
     .chat-item {
-      padding: 12px 16px; border-bottom: 1px solid #21262d; display: flex; align-items: center;
+      padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center;
       gap: 12px; cursor: pointer;
     }
-    .chat-item:hover { background: #161b22; }
+    .chat-item:hover { background: var(--bg-panel); }
     .chat-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #21262d; display: flex; align-items: center; justify-content: center; font-weight: bold; overflow: hidden; flex-shrink: 0; }
     .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #6e7681; display: inline-block; margin-right: 6px; }
     .status-dot.online { background: #22c55e; }
 
-    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background-size: cover; background-position: center; }
+
+    /* Предустановленные фоны */
+    .bg-preset-1 { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    .bg-preset-2 { background: linear-gradient(135deg, #18181b, #27272a); }
+    .bg-preset-3 { background: linear-gradient(135deg, #022c22, #064e3b); }
+    .bg-preset-4 { background: linear-gradient(135deg, #311042, #581c87); }
 
     .msg {
       max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 14px; word-break: break-word;
       display: flex; flex-direction: column; position: relative;
     }
-    .msg.mine { align-self: flex-end; background: #27272a; border: 1px solid #3f3f46; color: #fff; }
-    .msg.other { align-self: flex-start; background: #1e293b; border: 1px solid #334155; color: #f8fafc; }
-    .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: #f59e0b; font-weight: bold; margin-bottom: 4px; }
-    .msg-time { font-size: 10px; color: #8b949e; font-weight: normal; }
+    .msg.mine { align-self: flex-end; background: var(--msg-mine-bg); border: 1px solid var(--border-color); }
+    .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
+    .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
+    .msg-time { font-size: 10px; color: var(--text-muted); font-weight: normal; }
     .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 0; }
 
-    .tg-circle {
-      width: 160px; height: 160px; border-radius: 50%; object-fit: cover;
-      border: 3px solid #f59e0b; cursor: pointer; transition: transform 0.2s;
+    /* Видеокружочки */
+    .video-circle {
+      width: 180px; height: 180px; border-radius: 50%; object-fit: cover;
+      border: 3px solid var(--brand-color); margin-top: 4px;
     }
 
-    #controls { background: #161b22; padding: 8px; border-top: 1px solid #30363d; }
+    #controls { background: var(--bg-panel); padding: 8px; border-top: 1px solid var(--border-color); }
     .input-row { display: flex; align-items: center; gap: 6px; }
-    #input { flex: 1; padding: 10px 14px; border: 1px solid #30363d; border-radius: 20px; background: #0d1117; color: #fff; font-size: 14px; outline: none; }
-    .btn-icon { background: #21262d; border: 1px solid #30363d; color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
-    .btn-send { background: #f59e0b; border: none; color: #000; font-weight: bold; }
+    #input { flex: 1; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 20px; background: var(--bg-main); color: var(--text-main); font-size: 14px; outline: none; }
+    .btn-icon { background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+    .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; }
 
     /* Окно Звонка */
     #call-modal {
@@ -90,12 +118,19 @@
     }
     .video-container { position: relative; width: 100%; max-width: 450px; flex: 1; background: #161b22; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     #remote-video { width: 100%; height: 100%; object-fit: cover; }
-    #local-video { position: absolute; bottom: 12px; right: 12px; width: 100px; height: 140px; border-radius: 10px; object-fit: cover; border: 2px solid #f59e0b; background: #000; }
+    #local-video { position: absolute; bottom: 12px; right: 12px; width: 100px; height: 140px; border-radius: 10px; object-fit: cover; border: 2px solid var(--brand-color); background: #000; }
     
     .call-controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
     .call-btn { background: #22c55e; border: none; color: white; padding: 10px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; }
     .call-btn.off { background: #6e7681; }
     .call-btn.danger { background: #ef4444; }
+
+    /* Модальное окно записи */
+    #record-modal {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85);
+      flex-direction: column; align-items: center; justify-content: center; gap: 15px; z-index: 1000;
+    }
+    #circle-preview { width: 220px; height: 220px; border-radius: 50%; border: 4px solid var(--brand-color); object-fit: cover; background: #000; }
   </style>
 </head>
 <body>
@@ -104,9 +139,12 @@
     <header>
       <div class="brand">
         <span>✨</span>
-        <h1>ХРАМ</h1>
+        <h1 id="brand-title">ХРАМ</h1>
       </div>
-      <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов с SIM / устройства">📱+</button>
+      <div>
+        <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов с SIM / устройства">📱+</button>
+      </div>
     </header>
 
     <div class="nav-tabs">
@@ -122,7 +160,7 @@
           <div class="chat-avatar">🤖</div>
           <div>
             <strong>ИИ Помощник 🤖</strong>
-            <div style="font-size:12px; color:#8b949e;">Помощник чата</div>
+            <div style="font-size:12px; color:var(--text-muted);">Помощник чата</div>
           </div>
         </div>
       </div>
@@ -132,24 +170,24 @@
     <div id="profile-page" class="page">
       <div class="profile-card">
         <div id="avatar-display" class="avatar-preview">👤</div>
-        <label style="color:#f59e0b; cursor:pointer; font-size:13px;">
+        <label style="color:var(--brand-color); cursor:pointer; font-size:13px;">
           Загрузить аватарку
           <input type="file" id="avatar-input" accept="image/*" style="display:none;">
         </label>
 
         <div style="width:100%; max-width:320px;">
-          <label style="font-size:12px; color:#8b949e;">Ваше имя / Ник:</label>
+          <label style="font-size:12px; color:var(--text-muted);">Ваше имя / Ник:</label>
           <input id="username-input" class="input-field" placeholder="Введите имя..." />
         </div>
 
         <div style="width:100%; max-width:320px;">
-          <label style="font-size:12px; color:#8b949e;">Ваш номер телефона (для поиска друзьям):</label>
+          <label style="font-size:12px; color:var(--text-muted);">Ваш номер телефона:</label>
           <input id="phone-input" class="input-field" placeholder="+7 999 000 00 00" />
         </div>
 
         <button class="call-btn" id="save-profile-btn" style="width:100%; max-width:320px; justify-content:center;">Сохранить профиль</button>
 
-        <div style="font-size: 13px; color: #8b949e; margin-top:10px;">ВАШ UID:</div>
+        <div style="font-size: 13px; color: var(--text-muted); margin-top:10px;">ВАШ UID:</div>
         <div class="uid-box" id="my-uid">Загрузка...</div>
       </div>
     </div>
@@ -157,6 +195,21 @@
     <!-- Настройки -->
     <div id="settings-page" class="page">
       <div class="profile-card">
+        <h3>🎨 Тема оформления</h3>
+        <select id="theme-select" class="input-field">
+          <option value="dark">Тёмная тема</option>
+          <option value="light">Светлая тема</option>
+        </select>
+
+        <h3>🎨 Цвет названия «ХРАМ»</h3>
+        <select id="brand-color-select" class="input-field">
+          <option value="#f59e0b">Янтарный (По умолчанию)</option>
+          <option value="#ef4444">Красный</option>
+          <option value="#22c55e">Зеленый</option>
+          <option value="#3b82f6">Синий</option>
+          <option value="#a855f7">Фиолетовый</option>
+        </select>
+
         <h3>🎵 Рингтон звонков</h3>
         <input type="file" id="ringtone-input" accept="audio/*" class="input-field">
         <div id="ringtone-status" style="font-size:12px; color:#22c55e;"></div>
@@ -165,23 +218,30 @@
 
     <!-- Чат -->
     <div id="chat-window-modal" class="page">
-      <div id="chat-header" style="background:#161b22; padding:8px 16px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">
+      <div id="chat-header" style="background:var(--bg-panel); padding:8px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
         <button class="btn-icon" id="close-chat-btn">←</button>
         <div style="display:flex; align-items:center; gap:10px;">
           <div id="active-chat-avatar" class="chat-avatar" style="width:36px; height:36px;">👤</div>
           <div>
             <strong id="active-chat-title">Чат</strong>
-            <div id="active-chat-status" style="font-size:11px; color:#8b949e;">⚪ Офлайн</div>
+            <div id="active-chat-status" style="font-size:11px; color:var(--text-muted);">⚪ Офлайн</div>
           </div>
         </div>
-        <button class="call-btn" id="start-call-btn">📞 Звонок</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
+          <button class="call-btn" id="start-call-btn">📞 Звонок</button>
+        </div>
       </div>
 
       <div id="messages"></div>
 
       <div id="controls">
         <div class="input-row">
-          <label class="btn-icon">📎<input type="file" id="file-input" style="display:none;"></label>
+          <label class="btn-icon" title="Отправить файл/фото">
+            📎<input type="file" id="file-input" style="display:none;" accept="*/*">
+          </label>
+          <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение">🎤</button>
+          <button class="btn-icon" id="record-circle-btn" title="Видеокружочек">⭕</button>
           <input id="input" autocomplete="off" placeholder="Сообщение..." />
           <button class="btn-icon btn-send" id="send-btn">➔</button>
         </div>
@@ -210,6 +270,15 @@
     </div>
   </div>
 
+  <!-- Модальное окно записи круглого видео -->
+  <div id="record-modal">
+    <video id="circle-preview" autoplay playsinline muted></video>
+    <div style="display:flex; gap:10px;">
+      <button class="call-btn danger" id="cancel-record-btn">Отмена</button>
+      <button class="call-btn" id="stop-record-btn">Отправить</button>
+    </div>
+  </div>
+
   <audio id="custom-ringtone" loop></audio>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -227,7 +296,29 @@
     document.getElementById('my-uid').textContent = myProfile.uid;
     document.getElementById('username-input').value = myProfile.username;
     document.getElementById('phone-input').value = myProfile.phone;
-    
+
+    // Применение темы и цвета
+    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
+    if (savedTheme === 'light') document.body.classList.add('light-theme');
+    document.getElementById('theme-select').value = savedTheme;
+
+    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
+    document.documentElement.style.setProperty('--brand-color', savedBrandColor);
+    document.getElementById('brand-color-select').value = savedBrandColor;
+
+    document.getElementById('theme-select').addEventListener('change', (e) => {
+      const theme = e.target.value;
+      localStorage.setItem('khram_theme', theme);
+      if (theme === 'light') document.body.classList.add('light-theme');
+      else document.body.classList.remove('light-theme');
+    });
+
+    document.getElementById('brand-color-select').addEventListener('change', (e) => {
+      const color = e.target.value;
+      localStorage.setItem('khram_brand_color', color);
+      document.documentElement.style.setProperty('--brand-color', color);
+    });
+
     function updateMyAvatarDisplay() {
       if (myProfile.avatar) {
         document.getElementById('avatar-display').innerHTML = `<img src="${myProfile.avatar}" style="width:100%;height:100%;object-fit:cover;">`;
@@ -263,20 +354,38 @@
       }
     });
 
-    // Переключение вкладок
-    function switchTab(pageId, targetBtn) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(pageId).classList.add('active');
-      if (targetBtn) targetBtn.classList.add('active');
+    // Настройка рингтона & генерация системного звука
+    const ringtoneAudio = document.getElementById('custom-ringtone');
+    let audioCtx = null, synthInterval = null;
+
+    function playSystemRingtone() {
+      if (ringtoneAudio.src) {
+        ringtoneAudio.play().catch(e => {});
+        return;
+      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      function pulse() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      }
+      pulse();
+      synthInterval = setInterval(pulse, 1600);
     }
 
-    document.getElementById('tab-btn-chats').addEventListener('click', (e) => switchTab('chats-page', e.target));
-    document.getElementById('tab-btn-profile').addEventListener('click', (e) => switchTab('profile-page', e.target));
-    document.getElementById('tab-btn-settings').addEventListener('click', (e) => switchTab('settings-page', e.target));
+    function stopSystemRingtone() {
+      if (ringtoneAudio.src) ringtoneAudio.pause();
+      if (synthInterval) clearInterval(synthInterval);
+    }
 
-    // Настройка рингтона
-    const ringtoneAudio = document.getElementById('custom-ringtone');
     document.getElementById('ringtone-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -293,24 +402,53 @@
       ringtoneAudio.src = localStorage.getItem('khram_ringtone');
     }
 
-    // Контакты
+    // Переключение вкладок
+    function switchTab(pageId, targetBtn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+      if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    document.getElementById('tab-btn-chats').addEventListener('click', (e) => switchTab('chats-page', e.target));
+    document.getElementById('tab-btn-profile').addEventListener('click', (e) => switchTab('profile-page', e.target));
+    document.getElementById('tab-btn-settings').addEventListener('click', (e) => switchTab('settings-page', e.target));
+
+    // Контакты и Группы
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
+    let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
     let activeOnlineUids = [];
 
     function renderContacts() {
       const chatList = document.getElementById('chat-list');
-      chatList.querySelectorAll('.dynamic-contact').forEach(el => el.remove());
+      chatList.querySelectorAll('.dynamic-item').forEach(el => el.remove());
 
+      // Рендер Групп
+      myGroups.forEach(g => {
+        const div = document.createElement('div');
+        div.className = 'chat-item dynamic-item';
+        div.addEventListener('click', () => openChat(g.id, g.name, '', true));
+        div.innerHTML = `
+          <div class="chat-avatar" style="background:#f59e0b; color:#000;">👥</div>
+          <div>
+            <strong>${g.name}</strong>
+            <div style="font-size:12px; color:var(--text-muted);">Групповой чат</div>
+          </div>
+        `;
+        chatList.appendChild(div);
+      });
+
+      // Рендер ЛС
       contacts.forEach(c => {
         const isOnline = activeOnlineUids.includes(c.uid);
         const div = document.createElement('div');
-        div.className = 'chat-item dynamic-contact';
-        div.addEventListener('click', () => openChat(c.uid, c.name, c.avatar));
+        div.className = 'chat-item dynamic-item';
+        div.addEventListener('click', () => openChat(c.uid, c.name, c.avatar, false));
         div.innerHTML = `
           <div class="chat-avatar">${c.avatar ? `<img src="${c.avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}</div>
           <div>
             <strong>${c.name}</strong>
-            <div style="font-size:12px; color:#8b949e;">
+            <div style="font-size:12px; color:var(--text-muted);">
               <span class="status-dot ${isOnline ? 'online' : ''}"></span>${isOnline ? 'Онлайн' : 'Офлайн'}
             </div>
           </div>
@@ -319,86 +457,45 @@
       });
     }
 
-    document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', ''));
+    document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', '', false));
 
-    socket.on('user-profile-updated', (updatedUser) => {
-      let changed = false;
+    // Создание Группового чата
+    document.getElementById('create-group-btn').addEventListener('click', () => {
+      const groupName = prompt('Введите название группы:');
+      if (!groupName) return;
+
+      const selectedUids = [];
       contacts.forEach(c => {
-        if (c.uid === updatedUser.uid) {
-          c.name = updatedUser.username || c.name;
-          c.avatar = updatedUser.avatar || c.avatar;
-          changed = true;
+        if (confirm(`Добавить ${c.name} в группу?`)) {
+          selectedUids.push(c.uid);
         }
       });
-      if (changed) {
-        localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+
+      socket.emit('create-group', { name: groupName, members: selectedUids, ownerUid: myProfile.uid });
+    });
+
+    socket.on('group-created', (groupData) => {
+      if (!myGroups.some(g => g.id === groupData.id)) {
+        myGroups.push(groupData);
+        localStorage.setItem('khram_groups', JSON.stringify(myGroups));
         renderContacts();
-        if (currentChatUid === updatedUser.uid) {
-          document.getElementById('active-chat-title').textContent = updatedUser.username;
-          if (updatedUser.avatar) {
-            document.getElementById('active-chat-avatar').innerHTML = `<img src="${updatedUser.avatar}" style="width:100%;height:100%;object-fit:cover;">`;
-          }
-        }
       }
     });
 
-    socket.on('online-users-list', (uids) => {
-      activeOnlineUids = uids;
-      renderContacts();
-      updateActiveChatStatus();
-    });
+    let currentChatUid = '', isCurrentGroup = false;
 
-    // Синхронизация контактов SIM
-    document.getElementById('sync-sim-btn').addEventListener('click', async () => {
-      let phoneNumbers = [];
-      if ('contacts' in navigator && 'ContactsManager' in window) {
-        try {
-          const props = ['tel'];
-          const selectContacts = await navigator.contacts.select(props, { multiple: true });
-          selectContacts.forEach(c => { if (c.tel) phoneNumbers.push(...c.tel); });
-        } catch(e) {}
-      }
-
-      if (phoneNumbers.length === 0) {
-        const input = prompt('Введите номера телефонов с SIM через запятую:', '+79991112233, +79992223344');
-        if (input) {
-          phoneNumbers = input.split(',');
-        }
-      }
-
-      if (phoneNumbers.length > 0) {
-        socket.emit('sync-contacts', phoneNumbers);
-      }
-    });
-
-    socket.on('contacts-synced', (foundContacts) => {
-      if (!foundContacts || foundContacts.length === 0) {
-        alert('Зарегистрированных пользователей среди этих номеров не найдено.');
-        return;
-      }
-
-      let addedCount = 0;
-      foundContacts.forEach(fc => {
-        if (fc.uid !== myProfile.uid && !contacts.some(c => c.uid === fc.uid)) {
-          contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
-          addedCount++;
-        }
-      });
-
-      localStorage.setItem('khram_contacts', JSON.stringify(contacts));
-      renderContacts();
-      alert(`Добавлено новых контактов: ${addedCount}`);
-    });
-
-    let currentChatUid = '';
-    function openChat(uid, title, avatar) {
+    function openChat(uid, title, avatar, isGroup = false) {
       currentChatUid = uid;
+      isCurrentGroup = isGroup;
+
       document.getElementById('active-chat-title').textContent = title;
       const avatarContainer = document.getElementById('active-chat-avatar');
-      avatarContainer.innerHTML = avatar ? `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤';
+      avatarContainer.innerHTML = isGroup ? '👥' : (avatar ? `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤');
 
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('chat-window-modal').classList.add('active');
+
+      applyChatBackground();
       updateActiveChatStatus();
       loadHistory();
     }
@@ -407,19 +504,75 @@
       document.getElementById('chat-window-modal').classList.remove('active');
       document.getElementById('chats-page').classList.add('active');
       currentChatUid = '';
+      isCurrentGroup = false;
     }
     document.getElementById('close-chat-btn').addEventListener('click', closeChat);
+
+    // Выбор фонов
+    document.getElementById('bg-settings-btn').addEventListener('click', () => {
+      if (isCurrentGroup) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              const bgUrl = evt.target.result;
+              socket.emit('update-group-bg', { groupId: currentChatUid, bgImage: bgUrl, userUid: myProfile.uid });
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        fileInput.click();
+      } else {
+        const choice = prompt('Выберите фон (1, 2, 3, 4):');
+        if (['1','2','3','4'].includes(choice)) {
+          localStorage.setItem(`bg_chat_${currentChatUid}`, `bg-preset-${choice}`);
+          applyChatBackground();
+        }
+      }
+    });
+
+    function applyChatBackground() {
+      const msgBox = document.getElementById('messages');
+      msgBox.style.backgroundImage = '';
+      msgBox.className = '';
+
+      if (isCurrentGroup) {
+        const g = myGroups.find(group => group.id === currentChatUid);
+        if (g && g.bgImage) {
+          msgBox.style.backgroundImage = `url(${g.bgImage})`;
+        }
+      } else {
+        const preset = localStorage.getItem(`bg_chat_${currentChatUid}`);
+        if (preset) {
+          msgBox.classList.add(preset);
+        }
+      }
+    }
+
+    socket.on('group-bg-updated', ({ groupId, bgImage }) => {
+      const g = myGroups.find(group => group.id === groupId);
+      if (g) g.bgImage = bgImage;
+      localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+      if (currentChatUid === groupId) applyChatBackground();
+    });
 
     function updateActiveChatStatus() {
       if (!currentChatUid) return;
       const statusEl = document.getElementById('active-chat-status');
-      if (currentChatUid === 'bot-assistant') {
+      if (isCurrentGroup) {
+        statusEl.textContent = 'Групповой чат';
+        statusEl.style.color = 'var(--brand-color)';
+      } else if (currentChatUid === 'bot-assistant') {
         statusEl.textContent = '🟢 Онлайн';
         statusEl.style.color = '#22c55e';
       } else {
         const isOnline = activeOnlineUids.includes(currentChatUid);
         statusEl.textContent = isOnline ? '🟢 Онлайн' : '⚪ Офлайн';
-        statusEl.style.color = isOnline ? '#22c55e' : '#8b949e';
+        statusEl.style.color = isOnline ? '#22c55e' : 'var(--text-muted)';
       }
     }
 
@@ -435,7 +588,7 @@
     }
 
     function saveMessageToHistory(msg) {
-      const chatKey = (msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
+      const chatKey = msg.isGroup ? msg.targetUid : ((msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid);
       const key = getHistoryKey(chatKey);
       const saved = JSON.parse(localStorage.getItem(key) || '[]');
       if (!saved.some(m => m.id === msg.id)) {
@@ -465,8 +618,12 @@
         const p = document.createElement('div'); p.textContent = data.content; div.appendChild(p);
       } else if (data.type === 'image') {
         const img = document.createElement('img'); img.src = data.content; img.style.maxWidth = '100%'; img.style.borderRadius = '8px'; div.appendChild(img);
+      } else if (data.type === 'audio') {
+        const audio = document.createElement('audio'); audio.src = data.content; audio.controls = true; div.appendChild(audio);
+      } else if (data.type === 'circle') {
+        const video = document.createElement('video'); video.src = data.content; video.autoplay = true; video.loop = true; video.muted = true; video.playsInline = true; video.className = 'video-circle'; div.appendChild(video);
       } else if (data.type === 'file') {
-        const a = document.createElement('a'); a.href = data.content; a.download = data.fileName || 'file'; a.style.color = '#f59e0b'; a.textContent = `📁 ${data.fileName}`; div.appendChild(a);
+        const a = document.createElement('a'); a.href = data.content; a.download = data.fileName || 'file'; a.style.color = 'var(--brand-color)'; a.textContent = `📁 ${data.fileName}`; div.appendChild(a);
       }
 
       messagesDiv.appendChild(div);
@@ -481,7 +638,7 @@
     });
 
     function deleteMessage(msgId) {
-      socket.emit('delete message', { msgId, senderUid: myProfile.uid, targetUid: currentChatUid });
+      socket.emit('delete message', { msgId, senderUid: myProfile.uid, targetUid: currentChatUid, isGroup: isCurrentGroup });
     }
 
     socket.on('message deleted', (data) => {
@@ -497,12 +654,111 @@
     function sendText() {
       const text = input.value.trim();
       if (text && currentChatUid) {
-        socket.emit('chat message', { senderUid: myProfile.uid, targetUid: currentChatUid, type: 'text', content: text });
+        socket.emit('chat message', { senderUid: myProfile.uid, targetUid: currentChatUid, isGroup: isCurrentGroup, type: 'text', content: text });
         input.value = '';
       }
     }
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
+
+    // Отправка любых файлов / Фото
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file || !currentChatUid) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const isImg = file.type.startsWith('image/');
+        socket.emit('chat message', {
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: isCurrentGroup,
+          type: isImg ? 'image' : 'file',
+          content: evt.target.result,
+          fileName: file.name,
+          fileSize: file.size
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Запись Голосовых сообщений 🎤
+    let mediaRecorder, audioChunks = [];
+    document.getElementById('record-audio-btn').addEventListener('click', async () => {
+      if (!navigator.mediaDevices) return alert('Микрофон недоступен');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            socket.emit('chat message', {
+              senderUid: myProfile.uid,
+              targetUid: currentChatUid,
+              isGroup: isCurrentGroup,
+              type: 'audio',
+              content: evt.target.result
+            });
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach(t => t.stop());
+        };
+
+        if (confirm('Идет запись голоса... Нажмите ОК для отправки')) {
+          mediaRecorder.start();
+          setTimeout(() => mediaRecorder.stop(), 500);
+        }
+      } catch(e) { alert(' Ошибка доступа к микрофону'); }
+    });
+
+    // Запись Видеокружочков ⭕
+    let circleStream, circleRecorder, circleChunks = [];
+    const recordModal = document.getElementById('record-modal');
+    const circlePreview = document.getElementById('circle-preview');
+
+    document.getElementById('record-circle-btn').addEventListener('click', async () => {
+      try {
+        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        circlePreview.srcObject = circleStream;
+        recordModal.style.display = 'flex';
+
+        circleChunks = [];
+        circleRecorder = new MediaRecorder(circleStream);
+        circleRecorder.ondataavailable = e => circleChunks.push(e.data);
+        circleRecorder.start();
+      } catch(e) { alert(' Ошибка доступа к камере'); }
+    });
+
+    document.getElementById('stop-record-btn').addEventListener('click', () => {
+      if (circleRecorder) {
+        circleRecorder.onstop = () => {
+          const blob = new Blob(circleChunks, { type: 'video/webm' });
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            socket.emit('chat message', {
+              senderUid: myProfile.uid,
+              targetUid: currentChatUid,
+              isGroup: isCurrentGroup,
+              type: 'circle',
+              content: evt.target.result
+            });
+          };
+          reader.readAsDataURL(blob);
+          if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+        };
+        circleRecorder.stop();
+      }
+      recordModal.style.display = 'none';
+    });
+
+    document.getElementById('cancel-record-btn').addEventListener('click', () => {
+      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+      recordModal.style.display = 'none';
+    });
 
     // WebRTC Звонки
     let peerConnection, localStream;
@@ -513,59 +769,16 @@
     const acceptCallBtn = document.getElementById('accept-call-btn');
     let callTargetSocketId = null;
 
-    const rtcConfig = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
+    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
     async function setupCallMedia(facingMode = 'user') {
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode },
-        audio: true
-      });
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode }, audio: true });
       localVideo.srcObject = localStream;
-
-      if (peerConnection) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender && videoTrack) {
-          sender.replaceTrack(videoTrack);
-        }
-      }
     }
-
-    document.getElementById('toggle-mic-btn').addEventListener('click', (e) => {
-      if (localStream) {
-        isMicEnabled = !isMicEnabled;
-        localStream.getAudioTracks().forEach(t => t.enabled = isMicEnabled);
-        e.target.classList.toggle('off', !isMicEnabled);
-      }
-    });
-
-    document.getElementById('toggle-cam-btn').addEventListener('click', (e) => {
-      if (localStream) {
-        isCamEnabled = !isCamEnabled;
-        localStream.getVideoTracks().forEach(t => t.enabled = isCamEnabled);
-        e.target.classList.toggle('off', !isCamEnabled);
-      }
-    });
-
-    document.getElementById('switch-cam-btn').addEventListener('click', async () => {
-      currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
-      await setupCallMedia(currentFacingMode);
-    });
 
     document.getElementById('start-call-btn').addEventListener('click', async () => {
       if (!currentChatUid) return;
-      const contact = contacts.find(c => c.uid === currentChatUid);
-      document.getElementById('call-username').textContent = contact ? contact.name : 'Звонок...';
-      document.getElementById('call-avatar').innerHTML = (contact && contact.avatar) ? `<img src="${contact.avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤';
-
       callModal.style.display = 'flex';
       await setupCallMedia(currentFacingMode);
 
@@ -577,23 +790,21 @@
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
-      socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer });
+      socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer, isGroup: isCurrentGroup });
     });
 
     socket.on('incoming-call', async (data) => {
       callTargetSocketId = data.fromSocketId;
       document.getElementById('call-username').textContent = data.fromName || 'Входящий звонок';
-      document.getElementById('call-avatar').innerHTML = data.fromAvatar ? `<img src="${data.fromAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤';
-
       callModal.style.display = 'flex';
       acceptCallBtn.style.display = 'flex';
 
-      if (ringtoneAudio.src) ringtoneAudio.play().catch(e=>{});
+      playSystemRingtone();
       window.incomingOffer = data.offer;
     });
 
     acceptCallBtn.addEventListener('click', async () => {
-      ringtoneAudio.pause();
+      stopSystemRingtone();
       acceptCallBtn.style.display = 'none';
       await setupCallMedia(currentFacingMode);
 
@@ -623,7 +834,7 @@
     });
 
     function closeCall() {
-      ringtoneAudio.pause();
+      stopSystemRingtone();
       if (peerConnection) { peerConnection.close(); peerConnection = null; }
       if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       remoteVideo.srcObject = null;
@@ -639,7 +850,26 @@
 
     socket.on('call-ended', closeCall);
 
+    socket.on('online-users-list', (uids) => {
+      activeOnlineUids = uids;
+      renderContacts();
+      updateActiveChatStatus();
+    });
+
+    socket.on('contacts-synced', (foundContacts) => {
+      let addedCount = 0;
+      foundContacts.forEach(fc => {
+        if (fc.uid !== myProfile.uid && !contacts.some(c => c.uid === fc.uid)) {
+          contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
+          addedCount++;
+        }
+      });
+      localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+      renderContacts();
+      alert(`Добавлено новых контактов: ${addedCount}`);
+    });
+
     renderContacts();
   </script>
 </body>
-  </html>
+            </html>
