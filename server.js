@@ -5,12 +5,12 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Поддержка передачи гигантских файлов и медиаданных
+// Поддержка передачи тяжелых файлов до 70 ГБ
 app.use(express.json({ limit: '70gb' }));
 app.use(express.urlencoded({ limit: '70gb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 1e9, // Максимальный размер буфера сокетов для медиафайлов
+  maxHttpBufferSize: 1e9,
   cors: { origin: "*" }
 });
 
@@ -19,6 +19,17 @@ app.use(express.static('public'));
 const registeredUsers = new Map();
 const socketToUid = new Map();
 const groups = new Map();
+
+// Создаем глобальную группу по умолчанию "храм"
+const DEFAULT_GROUP_ID = 'group-hram-main';
+groups.set(DEFAULT_GROUP_ID, {
+  id: DEFAULT_GROUP_ID,
+  name: 'храм',
+  ownerUid: 'system',
+  admins: new Set(['system']),
+  members: new Set(),
+  bgImage: ''
+});
 
 function broadcastOnlineUsers() {
   const onlineUids = Array.from(socketToUid.values());
@@ -43,6 +54,13 @@ io.on('connection', (socket) => {
     
     socket.join(user.uid);
 
+    // Добавляем всех по умолчанию в главную группу "храм"
+    const hramGroup = groups.get(DEFAULT_GROUP_ID);
+    if (hramGroup) {
+      hramGroup.members.add(user.uid);
+      socket.join(DEFAULT_GROUP_ID);
+    }
+
     groups.forEach((g) => {
       if (g.members.has(user.uid)) {
         socket.join(g.id);
@@ -60,7 +78,6 @@ io.on('connection', (socket) => {
 
   socket.on('sync-contacts', (phoneNumbers) => {
     if (!Array.isArray(phoneNumbers)) return;
-
     const normalizedPhones = phoneNumbers.map(p => String(p).replace(/\D/g, '')).filter(Boolean);
     const matchedUsers = [];
 
@@ -114,14 +131,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('update-group-bg', ({ groupId, bgImage, userUid }) => {
-    const g = groups.get(groupId);
-    if (g && (g.ownerUid === userUid || g.admins.has(userUid))) {
-      g.bgImage = bgImage;
-      io.to(groupId).emit('group-bg-updated', { groupId, bgImage });
-    }
-  });
-
+  // Отправка и гарантированная передача сообщений (текст, фото, кружки, файлы)
   socket.on('chat message', (data) => {
     const sender = registeredUsers.get(data.senderUid) || {
       uid: data.senderUid,
@@ -130,7 +140,7 @@ io.on('connection', (socket) => {
     };
 
     const msgPayload = {
-      id: data.id || Date.now() + Math.random(),
+      id: data.id || (Date.now() + '-' + Math.random().toString(36).substring(2, 7)),
       senderUid: sender.uid,
       senderName: sender.username,
       senderAvatar: sender.avatar,
@@ -144,6 +154,7 @@ io.on('connection', (socket) => {
     };
 
     if (data.isGroup) {
+      // Рассылка всем участникам группы (включая отправителя)
       io.to(data.targetUid).emit('chat message', msgPayload);
       return;
     }
@@ -156,6 +167,7 @@ io.on('connection', (socket) => {
           senderUid: 'bot-assistant',
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
+          isGroup: false,
           type: 'text',
           content: `🤖 Получил ваше сообщение: "${data.content || '['+data.type+']'}"`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -164,8 +176,11 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Личные сообщения (ЛС)
     io.to(sender.uid).emit('chat message', msgPayload);
-    io.to(data.targetUid).emit('chat message', msgPayload);
+    if (sender.uid !== data.targetUid) {
+      io.to(data.targetUid).emit('chat message', msgPayload);
+    }
   });
 
   socket.on('delete message', (data) => {
@@ -177,6 +192,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Логика звонков с WebRTC
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
