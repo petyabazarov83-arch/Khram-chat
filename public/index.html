@@ -81,10 +81,7 @@
     .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #6e7681; display: inline-block; margin-right: 6px; }
     .status-dot.online { background: #22c55e; }
 
-    #messages {
-      flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
-      background-size: cover; background-position: center; background-repeat: no-repeat;
-    }
+    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background-size: cover; background-position: center; }
 
     .msg {
       max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 14px; word-break: break-word;
@@ -94,6 +91,7 @@
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
 
+    /* Кружочки */
     .video-circle {
       width: 160px; height: 160px; border-radius: 50%; object-fit: cover;
       border: 3px solid var(--brand-color); margin-top: 4px; display: block;
@@ -115,6 +113,7 @@
 
     .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; }
 
+    /* Модальные окна */
     .modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.85); z-index: 1000; flex-direction: column;
@@ -127,6 +126,7 @@
       display: flex; flex-direction: column; gap: 12px;
     }
 
+    /* Модалка просмотра кружка (Telegram Style) */
     #circle-modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.9); z-index: 2000; flex-direction: column;
@@ -138,6 +138,7 @@
       border: 4px solid var(--brand-color); box-shadow: 0 0 20px rgba(0,0,0,0.8);
     }
 
+    /* Модалка звонка */
     #call-modal {
       display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0d1117;
       flex-direction: column; align-items: center; justify-content: space-between; padding: 20px 10px; z-index: 1000;
@@ -146,7 +147,7 @@
     .video-container { position: relative; width: 100%; max-width: 450px; flex: 1; background: #161b22; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     #remote-video { width: 100%; height: 100%; object-fit: cover; }
     #local-video { position: absolute; bottom: 12px; right: 12px; width: 100px; height: 140px; border-radius: 10px; object-fit: cover; border: 2px solid var(--brand-color); background: #000; }
-
+    
     .call-controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
     .call-btn { background: #22c55e; border: none; color: white; padding: 10px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; }
     .call-btn.off { background: #4b5563; }
@@ -170,7 +171,7 @@
       </div>
       <div style="display:flex; gap:6px;">
         <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
-        <button class="btn-icon" id="sync-sim-btn" title="Поиск контактов VCF">📱+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Поиск контактов">📱+</button>
       </div>
     </header>
 
@@ -180,6 +181,7 @@
       <button class="tab-btn" id="tab-btn-settings">Настройки</button>
     </div>
 
+    <!-- Вкладка: Чаты -->
     <div id="chats-page" class="page active">
       <div id="chat-list">
         <div class="chat-item" id="bot-chat-item">
@@ -192,6 +194,7 @@
       </div>
     </div>
 
+    <!-- Вкладка: Профиль -->
     <div id="profile-page" class="page">
       <div class="profile-card">
         <div id="avatar-display" class="avatar-preview">👤</div>
@@ -217,6 +220,7 @@
       </div>
     </div>
 
+    <!-- Вкладка: Настройки -->
     <div id="settings-page" class="page">
       <div class="profile-card">
         <h3>🎨 Тема оформления</h3>
@@ -247,6 +251,7 @@
       </div>
     </div>
 
+    <!-- Окно чата -->
     <div id="chat-window-modal" class="page">
       <div id="chat-header" style="background:var(--bg-panel); padding:8px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
         <button class="btn-icon" id="close-chat-btn">←</button>
@@ -259,7 +264,7 @@
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
-          <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑</button>
+          <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑️️</button>
           <button class="call-btn" id="start-call-btn">📞 Звонок</button>
         </div>
       </div>
@@ -280,10 +285,12 @@
     </div>
   </div>
 
+  <!-- Модалка просмотра видеокружочка (Telegram Style) -->
   <div id="circle-modal" onclick="closeCircleModal()">
-    <video id="circle-modal-video" autoplay playsinline loop></video>
+    <video id="circle-modal-video" autoplay playsinline></video>
   </div>
 
+  <!-- Модалка создания группы -->
   <div id="group-modal" class="modal">
     <div class="modal-content">
       <h3>👥 Создать группу</h3>
@@ -297,6 +304,7 @@
     </div>
   </div>
 
+  <!-- Модалка смены фона -->
   <div id="bg-modal" class="modal">
     <div class="modal-content">
       <h3>🖼️ Фон чата</h3>
@@ -309,6 +317,7 @@
     </div>
   </div>
 
+  <!-- Окно звонка с кнопками управления -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👤</div>
@@ -329,6 +338,7 @@
     </div>
   </div>
 
+  <!-- Запись кружка -->
   <div id="record-modal">
     <video id="circle-preview" autoplay playsinline muted></video>
     <div style="display:flex; gap:10px;">
@@ -342,15 +352,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-
-    // STUN/TURN серверы для стабильных звонков через ЛЮБОЙ интернет и Wi-Fi
-    const rtcConfig = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
-      ]
-    };
 
     let myProfile = {
       uid: localStorage.getItem('khram_uid') || ('khram-user-' + Math.random().toString(36).substring(2, 8)),
@@ -398,7 +399,9 @@
       }
     });
 
-    // РИНГТОН В INDEXEDDB (до 46 МБ)
+    // ==========================================
+    // INDEXEDDB ДЛЯ РИНГТОНА (До 46 МБ)
+    // ==========================================
     let db = null;
     const request = indexedDB.open("KhramMediaDB", 1);
     request.onupgradeneeded = (e) => {
@@ -424,7 +427,7 @@
       store.put(fileName, "custom_ringtone_name");
       tx.oncomplete = () => {
         loadRingtoneFromDB();
-        alert("Рингтон сохранен!");
+        alert("Рингтон успешно сохранен!");
       };
     }
 
@@ -459,20 +462,23 @@
     document.getElementById("ringtone-input").addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 46 * 1024 * 1024) {
+
+      const maxSize = 46 * 1024 * 1024; // 46MB
+      if (file.size > maxSize) {
         alert("Размер рингтона превышает 46 МБ!");
         return;
       }
+
       saveRingtoneToDB(file, file.name);
     });
 
     document.getElementById("play-ringtone-btn").addEventListener("click", () => {
       if (customRingtoneAudio.paused) {
         if (!ringtoneLoaded) {
-          alert("Кастомный рингтон не установлен.");
+          alert("Кастомный рингтон не установлен. Используется стандартный.");
           return;
         }
-        customRingtoneAudio.play().catch(e => alert("Нажмите на экран для воспроизведения"));
+        customRingtoneAudio.play().catch(() => {});
         document.getElementById("play-ringtone-btn").textContent = "⏸ Пауза";
       } else {
         customRingtoneAudio.pause();
@@ -492,7 +498,7 @@
         ringtoneLoaded = false;
         document.getElementById("ringtone-status").textContent = "Стандартный рингтон";
         document.getElementById("play-ringtone-btn").textContent = "▶ Прослушать";
-        alert("Рингтон сброшен.");
+        alert("Рингтон сброшен на стандартный.");
       };
     });
 
@@ -511,14 +517,22 @@
       }
     }
 
-    // ТЕМЫ И СТИЛИ
+    // ==========================================
+    // НАСТРОЙКИ ТЕМЫ И ЦВЕТА
+    // ==========================================
     const themeSelect = document.getElementById('theme-select');
     const brandColorSelect = document.getElementById('brand-color-select');
     const brandTitle = document.getElementById('brand-title');
 
+    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
+    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
+
     function applyTheme(theme) {
-      if (theme === 'light') document.body.classList.add('light-theme');
-      else document.body.classList.remove('light-theme');
+      if (theme === 'light') {
+        document.body.classList.add('light-theme');
+      } else {
+        document.body.classList.remove('light-theme');
+      }
       themeSelect.value = theme;
       localStorage.setItem('khram_theme', theme);
     }
@@ -530,13 +544,67 @@
       localStorage.setItem('khram_brand_color', color);
     }
 
-    applyTheme(localStorage.getItem('khram_theme') || 'dark');
-    applyBrandColor(localStorage.getItem('khram_brand_color') || '#f59e0b');
+    applyTheme(savedTheme);
+    applyBrandColor(savedBrandColor);
 
     themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
-    // СПИСОК КОНТАКТОВ И ГРУПП
+    // ==========================================
+    // ПОИСК ПОЛЬЗОВАТЕЛЕЙ
+    // ==========================================
+    document.getElementById('sync-sim-btn').addEventListener('click', async () => {
+      let extractedPhones = [];
+      if ('contacts' in navigator && 'ContactsManager' in window) {
+        try {
+          const selectedContacts = await navigator.contacts.select(['tel'], { multiple: true });
+          selectedContacts.forEach(c => { if (c.tel) c.tel.forEach(t => extractedPhones.push(t)); });
+        } catch (err) {}
+      }
+      if (extractedPhones.length === 0) {
+        const option = confirm("Нажмите 'ОК', чтобы выбрать файл .vcf, или 'Отмена', чтобы ввести номер вручную.");
+        if (option) {
+          document.getElementById('vcf-file-input').click();
+          return;
+        } else {
+          const input = prompt('Введите номер телефона для поиска:');
+          if (input) extractedPhones = input.split(',').map(p => p.trim());
+        }
+      }
+      if (extractedPhones.length > 0) socket.emit('sync-contacts', extractedPhones);
+    });
+
+    document.getElementById('vcf-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const matches = evt.target.result.match(/TEL.*?:([+\d\s\-\(\)]+)/gi) || [];
+        const foundPhones = matches.map(m => m.replace(/TEL.*?:/i, '').trim());
+        if (foundPhones.length > 0) socket.emit('sync-contacts', foundPhones);
+      };
+      reader.readAsText(file);
+    });
+
+    socket.on('contacts-synced', (foundContacts) => {
+      let newCount = 0;
+      foundContacts.forEach(fc => {
+        if (fc.uid !== myProfile.uid) {
+          const existingIdx = contacts.findIndex(c => c.uid === fc.uid);
+          if (existingIdx !== -1) {
+            contacts[existingIdx].name = fc.name;
+            contacts[existingIdx].avatar = fc.avatar;
+          } else {
+            contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
+            newCount++;
+          }
+        }
+      });
+      localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+      renderContacts();
+      alert(newCount > 0 ? `🎉 Найдено новых пользователей: ${newCount}!` : 'Поиск завершен.');
+    });
+
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
     let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
     let activeOnlineUids = [];
@@ -551,7 +619,7 @@
         div.innerHTML = `
           <div style="display:flex; align-items:center; gap:12px; flex:1;" onclick="openChat('${g.id}', '${g.name}', '', true)">
             <div class="chat-avatar" style="background:var(--brand-color); color:#000;">👥</div>
-            <div><strong>${g.name}</strong><div style="font-size:12px; color:var(--text-muted);">Групповой чат</div></div>
+            <div><strong>${g.name}</strong><div style="font-size:12px; color:var(--text-muted);">Группа</div></div>
           </div>
         `;
         chatList.appendChild(div);
@@ -574,308 +642,51 @@
       });
     }
 
-    // ЧАТ, ФОН, ИСТОРИЯ
-    let currentChatUid = '', isCurrentGroup = false;
-
-    function openChat(uid, title, avatar, isGroup = false) {
-      currentChatUid = uid;
-      isCurrentGroup = isGroup;
-
-      if (isGroup) socket.emit('join-group-room', uid);
-
-      document.getElementById('active-chat-title').textContent = title;
-      const avatarContainer = document.getElementById('active-chat-avatar');
-      avatarContainer.innerHTML = isGroup ? '👥' : (avatar ? `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤');
-
-      applyChatBackground();
-
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById('chat-window-modal').classList.add('active');
-
-      loadHistory();
-    }
-
-    function applyChatBackground() {
-      const messagesDiv = document.getElementById('messages');
-      const savedBg = localStorage.getItem(`chat_bg_${currentChatUid}`);
-      if (savedBg) {
-        messagesDiv.style.backgroundImage = `url("${savedBg}")`;
-      } else {
-        messagesDiv.style.backgroundImage = 'none';
-      }
-    }
-
-    document.getElementById('close-chat-btn').addEventListener('click', () => {
-      document.getElementById('chat-window-modal').classList.remove('active');
-      document.getElementById('chats-page').classList.add('active');
-      currentChatUid = '';
-    });
-
-    const bgModal = document.getElementById('bg-modal');
-    document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
-    document.getElementById('close-bg-btn').addEventListener('click', () => bgModal.classList.remove('active'));
-
-    document.getElementById('bg-file-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file && currentChatUid) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          localStorage.setItem(`chat_bg_${currentChatUid}`, evt.target.result);
-          applyChatBackground();
-          bgModal.classList.remove('active');
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    document.getElementById('reset-bg-btn').addEventListener('click', () => {
-      if (currentChatUid) {
+    // ==========================================
+    // УДАЛЕНИЕ ЧАТА
+    // ==========================================
+    document.getElementById('delete-chat-btn').addEventListener('click', () => {
+      if (!currentChatUid) return;
+      if (confirm('Вы уверены, что хотите удалить этот чат и всю историю сообщений?')) {
+        localStorage.removeItem(getHistoryKey(currentChatUid));
         localStorage.removeItem(`chat_bg_${currentChatUid}`);
-        applyChatBackground();
-        bgModal.classList.remove('active');
+
+        if (isCurrentGroup) {
+          myGroups = myGroups.filter(g => g.id !== currentChatUid);
+          localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+        } else {
+          contacts = contacts.filter(c => c.uid !== currentChatUid);
+          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+        }
+
+        renderContacts();
+        document.getElementById('close-chat-btn').click();
       }
     });
 
-    function getHistoryKey(uid) { return `chat_history_${myProfile.uid}_${uid}`; }
-
-    function loadHistory() {
-      const messagesDiv = document.getElementById('messages');
-      messagesDiv.innerHTML = '';
-      const saved = JSON.parse(localStorage.getItem(getHistoryKey(currentChatUid)) || '[]');
-      saved.forEach(msg => renderMessageUI(msg));
-    }
-
-    function saveMessageToHistory(msg) {
-      const chatKey = msg.isGroup ? msg.targetUid : ((msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid);
-      const key = getHistoryKey(chatKey);
-      const saved = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!saved.some(m => m.id === msg.id)) {
-        saved.push(msg);
-        localStorage.setItem(key, JSON.stringify(saved));
-      }
-    }
-
-    function renderMessageUI(data) {
-      if (!data) return;
-      const isMine = data.senderUid === myProfile.uid;
-      const div = document.createElement('div');
-      div.className = `msg ${isMine ? 'mine' : 'other'}`;
-      div.id = `msg-${data.id || Math.random()}`;
-
-      div.innerHTML = `<div class="msg-header">${isMine ? 'Вы' : (data.senderName || 'Собеседник')}</div>`;
-      const contentBox = document.createElement('div');
-
-      if (data.type === 'text') {
-        contentBox.textContent = data.content;
-      } else if (data.type === 'audio') {
-        contentBox.innerHTML = `<audio src="${data.content}" controls style="max-width:200px;"></audio>`;
-      } else if (data.type === 'circle') {
-        contentBox.innerHTML = `<video src="${data.content}" class="video-circle" loop playsinline onclick="playCircleModal('${data.content}')"></video>`;
-      } else if (data.type === 'file') {
-        contentBox.innerHTML = `<a href="${data.content}" download="${data.fileName || 'file'}" style="color:var(--brand-color); font-weight:bold;">📁 ${data.fileName || 'Скачать файл'}</a>`;
-      }
-
-      div.appendChild(contentBox);
-      const messagesDiv = document.getElementById('messages');
-      messagesDiv.appendChild(div);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    socket.on('chat message', (data) => {
-      saveMessageToHistory(data);
-      if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
-        renderMessageUI(data);
-      }
-    });
-
-    const input = document.getElementById('input');
-    function sendText() {
-      const text = input.value.trim();
-      if (!text || !currentChatUid) return;
-
-      if (currentChatUid === 'bot') {
-        const userMsg = { id: Date.now(), senderUid: myProfile.uid, senderName: 'Вы', targetUid: 'bot', type: 'text', content: text };
-        saveMessageToHistory(userMsg);
-        renderMessageUI(userMsg);
-        input.value = '';
-
-        setTimeout(() => {
-          const botReply = { id: Date.now() + 1, senderUid: 'bot', senderName: 'ИИ Помощник 🤖', targetUid: myProfile.uid, type: 'text', content: 'Привет! Я виртуальный помощник Храма. Рад помочь с тестированием мессенджера!' };
-          saveMessageToHistory(botReply);
-          renderMessageUI(botReply);
-        }, 800);
-        return;
-      }
-
-      socket.emit('chat message', {
-        id: Date.now() + Math.random().toString(36).substring(2, 5),
-        senderUid: myProfile.uid,
-        senderName: myProfile.username,
-        targetUid: currentChatUid,
-        isGroup: isCurrentGroup,
-        type: 'text',
-        content: text
-      });
-      input.value = '';
-    }
-
-    document.getElementById('send-btn').addEventListener('click', sendText);
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
-
-    document.getElementById('bot-chat-item').addEventListener('click', () => {
-      openChat('bot', 'ИИ Помощник 🤖', '', false);
-    });
-
-    // ОТПРАВКА ФАЙЛОВ
-    document.getElementById('file-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file && currentChatUid) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          socket.emit('chat message', {
-            id: Date.now() + Math.random().toString(36).substring(2, 5),
-            senderUid: myProfile.uid,
-            senderName: myProfile.username,
-            targetUid: currentChatUid,
-            isGroup: isCurrentGroup,
-            type: 'file',
-            fileName: file.name,
-            content: evt.target.result
-          });
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    // ГОЛОСОВЫЕ СООБЩЕНИЯ
-    let mediaRecorder = null, audioChunks = [], isRecordingAudio = false;
-    const recAudioBtn = document.getElementById('record-audio-btn');
-
-    recAudioBtn.addEventListener('click', async () => {
-      if (!isRecordingAudio) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          audioChunks = [];
-          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-          mediaRecorder.onstop = () => {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              socket.emit('chat message', {
-                id: Date.now() + Math.random().toString(36).substring(2, 5),
-                senderUid: myProfile.uid,
-                senderName: myProfile.username,
-                targetUid: currentChatUid,
-                isGroup: isCurrentGroup,
-                type: 'audio',
-                content: evt.target.result
-              });
-            };
-            reader.readAsDataURL(blob);
-            stream.getTracks().forEach(t => t.stop());
-          };
-          mediaRecorder.start();
-          isRecordingAudio = true;
-          recAudioBtn.classList.add('active-rec');
-        } catch (err) { alert('Микрофон недоступен!'); }
-      } else {
-        mediaRecorder.stop();
-        isRecordingAudio = false;
-        recAudioBtn.classList.remove('active-rec');
-      }
-    });
-
-    // ВИДЕОКРУЖОЧКИ
-    let circleRecorder = null, circleChunks = [], circleStream = null;
-    const recordModal = document.getElementById('record-modal');
-    const circlePreview = document.getElementById('circle-preview');
-
-    document.getElementById('record-circle-btn').addEventListener('click', async () => {
-      try {
-        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-        circlePreview.srcObject = circleStream;
-        recordModal.classList.add('active');
-
-        circleRecorder = new MediaRecorder(circleStream);
-        circleChunks = [];
-        circleRecorder.ondataavailable = e => circleChunks.push(e.data);
-        circleRecorder.start();
-      } catch (err) { alert('Камера или микрофон недоступны!'); }
-    });
-
-    document.getElementById('cancel-record-btn').addEventListener('click', () => {
-      if (circleRecorder) circleRecorder.stop();
-      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-      recordModal.classList.remove('active');
-    });
-
-    document.getElementById('stop-record-btn').addEventListener('click', () => {
-      circleRecorder.onstop = () => {
-        const blob = new Blob(circleChunks, { type: 'video/webm' });
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          socket.emit('chat message', {
-            id: Date.now() + Math.random().toString(36).substring(2, 5),
-            senderUid: myProfile.uid,
-            senderName: myProfile.username,
-            targetUid: currentChatUid,
-            isGroup: isCurrentGroup,
-            type: 'circle',
-            content: evt.target.result
-          });
-        };
-        reader.readAsDataURL(blob);
-      };
-      circleRecorder.stop();
-      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-      recordModal.classList.remove('active');
-    });
-
+    // ==========================================
+    // УВЕЛИЧЕНИЕ КРУЖКА (TELEGRAM STYLE)
+    // ==========================================
     function playCircleModal(src) {
-      const modal = document.getElementById('circle-modal');
+      const circleModal = document.getElementById('circle-modal');
       const video = document.getElementById('circle-modal-video');
       video.src = src;
-      modal.classList.add('active');
-      video.play();
+      video.muted = false;
+      circleModal.classList.add('active');
+      video.play().catch(() => {});
     }
 
     function closeCircleModal() {
-      const modal = document.getElementById('circle-modal');
+      const circleModal = document.getElementById('circle-modal');
       const video = document.getElementById('circle-modal-video');
       video.pause();
-      modal.classList.remove('active');
+      video.src = '';
+      circleModal.classList.remove('active');
     }
 
-    // ИМПОРТ VCF
-    document.getElementById('sync-sim-btn').addEventListener('click', () => {
-      document.getElementById('vcf-file-input').click();
-    });
-
-    document.getElementById('vcf-file-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const text = evt.target.result;
-        const lines = text.split('\n');
-        let name = '', phone = '';
-        lines.forEach(line => {
-          if (line.startsWith('FN:')) name = line.replace('FN:', '').trim();
-          if (line.startsWith('TEL:')) phone = line.replace('TEL:', '').trim();
-        });
-        if (name) {
-          const newContact = { uid: 'uid-' + Math.random().toString(36).substring(2, 8), name, phone, avatar: '' };
-          contacts.push(newContact);
-          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
-          renderContacts();
-          alert(`Контакт ${name} добавлен!`);
-        }
-      };
-      reader.readAsText(file);
-    });
-
-    // ГРУППОВЫЕ ЧАТЫ
+    // ==========================================
+    // СОЗДАНИЕ ГРУППЫ
+    // ==========================================
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
       const listDiv = document.getElementById('group-members-list');
@@ -898,7 +709,7 @@
       const selectedMembers = Array.from(checkboxes).map(cb => cb.value);
 
       if (!name) return alert('Введите название группы!');
-      socket.emit('create-group', { id: 'group-' + Date.now(), name, members: selectedMembers, ownerUid: myProfile.uid });
+      socket.emit('create-group', { name, members: selectedMembers, ownerUid: myProfile.uid });
       groupModal.classList.remove('active');
       document.getElementById('group-name-input').value = '';
     });
@@ -911,38 +722,214 @@
       }
     });
 
-    // ЗВОНКИ
-    let peerConnection = null, localStream = null, currentFacingMode = 'user';
+    // ==========================================
+    // ФОН ЧАТА
+    // ==========================================
+    const bgModal = document.getElementById('bg-modal');
+    document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
+    document.getElementById('close-bg-btn').addEventListener('click', () => bgModal.classList.remove('active'));
+
+    document.getElementById('bg-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && currentChatUid) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const bgData = evt.target.result;
+          localStorage.setItem(`chat_bg_${currentChatUid}`, bgData);
+          document.getElementById('messages').style.backgroundImage = `url(${bgData})`;
+          bgModal.classList.remove('active');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById('reset-bg-btn').addEventListener('click', () => {
+      if (currentChatUid) {
+        localStorage.removeItem(`chat_bg_${currentChatUid}`);
+        document.getElementById('messages').style.backgroundImage = 'none';
+        bgModal.classList.remove('active');
+      }
+    });
+
+    // ==========================================
+    // ГОЛОСОВЫЕ СООБЩЕНИЯ
+    // ==========================================
+    let mediaRecorderAudio = null;
+    let audioChunks = [];
+    const recordAudioBtn = document.getElementById('record-audio-btn');
+
+    recordAudioBtn.addEventListener('click', async () => {
+      if (mediaRecorderAudio && mediaRecorderAudio.state === 'recording') {
+        mediaRecorderAudio.stop();
+        recordAudioBtn.classList.remove('active-rec');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderAudio = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorderAudio.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorderAudio.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            socket.emit('chat message', {
+              senderUid: myProfile.uid,
+              targetUid: currentChatUid,
+              isGroup: isCurrentGroup,
+              type: 'audio',
+              content: evt.target.result
+            });
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorderAudio.start();
+        recordAudioBtn.classList.add('active-rec');
+      } catch (err) {
+        alert('Не удалось получить доступ к микрофону');
+      }
+    });
+
+    // ==========================================
+    // ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
+    // ==========================================
+    let mediaRecorderCircle = null;
+    let circleChunks = [];
+    let circleStream = null;
+    const recordModal = document.getElementById('record-modal');
+    const circlePreview = document.getElementById('circle-preview');
+
+    document.getElementById('record-circle-btn').addEventListener('click', async () => {
+      try {
+        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+        circlePreview.srcObject = circleStream;
+        recordModal.classList.add('active');
+
+        mediaRecorderCircle = new MediaRecorder(circleStream);
+        circleChunks = [];
+
+        mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
+        mediaRecorderCircle.start();
+      } catch (err) {
+        alert('Не удалось получить доступ к камере или микрофону');
+      }
+    });
+
+    document.getElementById('cancel-record-btn').addEventListener('click', () => {
+      if (mediaRecorderCircle) mediaRecorderCircle.stop();
+      if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+      recordModal.classList.remove('active');
+    });
+
+    document.getElementById('stop-record-btn').addEventListener('click', () => {
+      if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') {
+        mediaRecorderCircle.onstop = () => {
+          const blob = new Blob(circleChunks, { type: 'video/webm' });
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            socket.emit('chat message', {
+              senderUid: myProfile.uid,
+              targetUid: currentChatUid,
+              isGroup: isCurrentGroup,
+              type: 'circle',
+              content: evt.target.result
+            });
+          };
+          reader.readAsDataURL(blob);
+          if (circleStream) circleStream.getTracks().forEach(t => t.stop());
+          recordModal.classList.remove('active');
+        };
+        mediaRecorderCircle.stop();
+      }
+    });
+
+    // ==========================================
+    // ЗВОНКИ И УПРАВЛЕНИЕ МЕДИА (WebRTC)
+    // ==========================================
+    let peerConnection = null;
+    let localStream = null;
+    let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
     const localVideo = document.getElementById('local-video');
     const remoteVideo = document.getElementById('remote-video');
 
+    const toggleMicBtn = document.getElementById('toggle-mic-btn');
+    const toggleCamBtn = document.getElementById('toggle-cam-btn');
+
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          toggleMicBtn.textContent = audioTrack.enabled ? '🎤 Вкл' : '🎤 Выкл';
+          toggleMicBtn.classList.toggle('off', !audioTrack.enabled);
+        }
+      }
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          toggleCamBtn.textContent = videoTrack.enabled ? '📷 Вкл' : '📷 Выкл';
+          toggleCamBtn.classList.toggle('off', !videoTrack.enabled);
+        }
+      }
+    });
+
+    document.getElementById('switch-cam-btn').addEventListener('click', async () => {
+      if (!localStream) return;
+      currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+
+      localStream.getVideoTracks().forEach(t => t.stop());
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+
+        localStream.removeTrack(localStream.getVideoTracks()[0]);
+        localStream.addTrack(newVideoTrack);
+        localVideo.srcObject = localStream;
+
+        if (peerConnection) {
+          const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) sender.replaceTrack(newVideoTrack);
+        }
+      } catch (e) {
+        alert('Не удалось переключить камеру');
+      }
+    });
+
     document.getElementById('start-call-btn').addEventListener('click', async () => {
-      if (!currentChatUid) return;
+      if (!currentChatUid || isCurrentGroup) return alert('Звонки доступны только в личных чатах');
       callModal.classList.add('active');
-      document.getElementById('call-username').textContent = isCurrentGroup ? 'Групповой звонок...' : 'Звоним...';
+      document.getElementById('call-username').textContent = 'Звоним...';
 
       localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
       localVideo.srcObject = localStream;
 
-      peerConnection = new RTCPeerConnection(rtcConfig);
+      peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
       peerConnection.ontrack = e => { remoteVideo.srcObject = e.streams[0]; };
       peerConnection.onicecandidate = e => {
-        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate, isGroup: isCurrentGroup });
+        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate });
       };
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      socket.emit('call-user', { senderUid: myProfile.uid, fromName: myProfile.username, targetUid: currentChatUid, offer, isGroup: isCurrentGroup });
+      socket.emit('call-user', { senderUid: myProfile.uid, targetUid: currentChatUid, offer });
     });
 
     socket.on('incoming-call', async (data) => {
       playCallSound();
       callModal.classList.add('active');
-      document.getElementById('call-username').textContent = `Звонок от ${data.fromName}`;
+      document.getElementById('call-username').textContent = `Входящий звонок: ${data.fromName}`;
       document.getElementById('accept-call-btn').style.display = 'inline-block';
 
       document.getElementById('accept-call-btn').onclick = async () => {
@@ -951,19 +938,19 @@
         localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
         localVideo.srcObject = localStream;
 
-        peerConnection = new RTCPeerConnection(rtcConfig);
+        peerConnection = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
         peerConnection.ontrack = e => { remoteVideo.srcObject = e.streams[0]; };
         peerConnection.onicecandidate = e => {
-          if (e.candidate) socket.emit('ice-candidate', { targetUid: data.senderUid, candidate: e.candidate });
+          if (e.candidate) socket.emit('ice-candidate', { targetUid: data.fromUid, candidate: e.candidate });
         };
 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        socket.emit('make-answer', { targetUid: data.senderUid, answer });
+        socket.emit('make-answer', { targetUid: data.fromUid, answer });
       };
     });
 
@@ -974,40 +961,6 @@
 
     socket.on('ice-candidate', async (data) => {
       if (peerConnection && data.candidate) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-    });
-
-    document.getElementById('toggle-mic-btn').addEventListener('click', () => {
-      if (localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = !audioTrack.enabled;
-          document.getElementById('toggle-mic-btn').classList.toggle('off', !audioTrack.enabled);
-        }
-      }
-    });
-
-    document.getElementById('toggle-cam-btn').addEventListener('click', () => {
-      if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.enabled = !videoTrack.enabled;
-          document.getElementById('toggle-cam-btn').classList.toggle('off', !videoTrack.enabled);
-        }
-      }
-    });
-
-    document.getElementById('switch-cam-btn').addEventListener('click', async () => {
-      if (localStream) {
-        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
-        localVideo.srcObject = localStream;
-        if (peerConnection) {
-          const videoTrack = localStream.getVideoTracks()[0];
-          const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-          if (sender) sender.replaceTrack(videoTrack);
-        }
-      }
     });
 
     document.getElementById('end-call-btn').addEventListener('click', endCall);
@@ -1023,7 +976,9 @@
       socket.emit('end-call', { targetUid: currentChatUid });
     }
 
-    // ВКЛАДКИ
+    // ==========================================
+    // Вкладки и общая логика
+    // ==========================================
     function switchTab(pageId, targetBtn) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1035,6 +990,120 @@
     document.getElementById('tab-btn-profile').addEventListener('click', (e) => switchTab('profile-page', e.target));
     document.getElementById('tab-btn-settings').addEventListener('click', (e) => switchTab('settings-page', e.target));
 
+    document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', '', false));
+
+    let currentChatUid = '', isCurrentGroup = false;
+
+    function openChat(uid, title, avatar, isGroup = false) {
+      currentChatUid = uid;
+      isCurrentGroup = isGroup;
+
+      document.getElementById('active-chat-title').textContent = title;
+      const avatarContainer = document.getElementById('active-chat-avatar');
+      avatarContainer.innerHTML = isGroup ? '👥' : (avatar ? `<img src="${avatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤');
+
+      const savedBg = localStorage.getItem(`chat_bg_${uid}`);
+      document.getElementById('messages').style.backgroundImage = savedBg ? `url(${savedBg})` : 'none';
+
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('chat-window-modal').classList.add('active');
+
+      loadHistory();
+    }
+
+    document.getElementById('close-chat-btn').addEventListener('click', () => {
+      document.getElementById('chat-window-modal').classList.remove('active');
+      document.getElementById('chats-page').classList.add('active');
+      currentChatUid = '';
+    });
+
+    function getHistoryKey(uid) { return `chat_history_${myProfile.uid}_${uid}`; }
+
+    function loadHistory() {
+      const messagesDiv = document.getElementById('messages');
+      messagesDiv.innerHTML = '';
+      const saved = JSON.parse(localStorage.getItem(getHistoryKey(currentChatUid)) || '[]');
+      saved.forEach(msg => renderMessageUI(msg));
+    }
+
+    function saveMessageToHistory(msg) {
+      const chatKey = msg.isGroup ? msg.targetUid : ((msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid);
+      const key = getHistoryKey(chatKey);
+      const saved = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!saved.some(m => m.id === msg.id)) {
+        saved.push(msg);
+        localStorage.setItem(key, JSON.stringify(saved));
+      }
+    }
+
+    function renderMessageUI(data) {
+      if (!data || document.getElementById(`msg-${data.id}`)) return;
+      const isMine = data.senderUid === myProfile.uid;
+      const div = document.createElement('div');
+      div.className = `msg ${isMine ? 'mine' : 'other'}`;
+      div.id = `msg-${data.id}`;
+
+      div.innerHTML = `<div class="msg-header">${isMine ? 'Вы' : (data.senderName || 'Собеседник')}</div>`;
+      const contentBox = document.createElement('div');
+
+      if (data.type === 'text') {
+        contentBox.textContent = data.content;
+      } else if (data.type === 'audio') {
+        contentBox.innerHTML = `<audio src="${data.content}" controls></audio>`;
+      } else if (data.type === 'circle') {
+        contentBox.innerHTML = `<video src="${data.content}" class="video-circle" muted loop playsinline onclick="playCircleModal('${data.content}')"></video>`;
+      } else if (data.type === 'file') {
+        contentBox.innerHTML = `<a href="${data.content}" download="${data.fileName}" style="color:var(--brand-color);">📁 ${data.fileName}</a>`;
+      }
+
+      div.appendChild(contentBox);
+      const messagesDiv = document.getElementById('messages');
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    socket.on('chat message', (data) => {
+      saveMessageToHistory(data);
+      if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
+        renderMessageUI(data);
+      }
+    });
+
+    const input = document.getElementById('input');
+    function sendText() {
+      const text = input.value.trim();
+      if (text && currentChatUid) {
+        socket.emit('chat message', {
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: isCurrentGroup,
+          type: 'text',
+          content: text
+        });
+        input.value = '';
+      }
+    }
+    document.getElementById('send-btn').addEventListener('click', sendText);
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
+
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && currentChatUid) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          socket.emit('chat message', {
+            senderUid: myProfile.uid,
+            targetUid: currentChatUid,
+            isGroup: isCurrentGroup,
+            type: 'file',
+            fileName: file.name,
+            content: evt.target.result
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
     socket.on('online-users-list', (uids) => {
       activeOnlineUids = uids;
       renderContacts();
@@ -1043,4 +1112,4 @@
     renderContacts();
   </script>
 </body>
-               </html>
+          </html>
