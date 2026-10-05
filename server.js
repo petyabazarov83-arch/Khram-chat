@@ -7,7 +7,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Лимит 100MB для видео, фото и аудио
+// Лимит 100MB для файлов, аудио и видео-кружочков
 const io = new Server(server, {
     maxHttpBufferSize: 1e8
 });
@@ -15,7 +15,7 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Хранилище подписок на фоновые Push-уведомления
+// Хранилище подписок на Web Push
 let pushSubscriptions = [];
 
 app.post('/subscribe', (req, res) => {
@@ -27,7 +27,7 @@ app.post('/subscribe', (req, res) => {
 function sendPushNotification(title, body) {
     const payload = JSON.stringify({ title, body });
     pushSubscriptions.forEach((sub, index) => {
-        webpush.sendNotification(sub, payload).catch((err) => {
+        webpush.sendNotification(sub, payload).catch(() => {
             pushSubscriptions.splice(index, 1);
         });
     });
@@ -37,6 +37,7 @@ function sendPushNotification(title, body) {
 io.on('connection', (socket) => {
     console.log('Пользователь подключился:', socket.id);
 
+    // Обработка сообщений
     socket.on('sendMessage', (data) => {
         io.emit('newMessage', {
             sender: socket.id,
@@ -52,13 +53,13 @@ io.on('connection', (socket) => {
         sendPushNotification('Khram Messenger', notifText);
     });
 
-    // WebRTC Сигнализация
+    // WebRTC Сигнализация для видеозвонков
     socket.on('callUser', (data) => {
         socket.broadcast.emit('incomingCall', {
             from: socket.id,
             offer: data.offer
         });
-        sendPushNotification('Входящий звонок', 'Вам кто-то звонит!');
+        sendPushNotification('Входящий звонок', 'Вам кто-то звонит в Khram Messenger!');
     });
 
     socket.on('answerCall', (data) => {
@@ -79,4 +80,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Сервер успешно запущен на порту ${PORT}`);
+});
