@@ -439,7 +439,11 @@
       });
       localStorage.setItem('khram_contacts', JSON.stringify(contacts));
       renderContacts();
-      alert(`Найдено и добавлено контактов: ${addedCount}`);
+      if (addedCount > 0) {
+        alert(`Найдено и добавлено контактов: ${addedCount}`);
+      } else {
+        alert('Пользователи с такими номерами не найдены или уже есть у вас в контактах');
+      }
     });
 
     const ringtoneAudio = document.getElementById('custom-ringtone');
@@ -1089,4 +1093,4 @@
     renderContacts();
   </script>
 </body>
-          </html>
+  </html>
