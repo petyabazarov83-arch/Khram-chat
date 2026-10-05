@@ -348,7 +348,7 @@
       }
     });
 
-    // Поиск и импорт контактов (кнопка 📱+)
+    // Поиск и импорт контактов
     document.getElementById('sync-sim-btn').addEventListener('click', () => {
       const inputPhones = prompt('Введите номера телефонов для поиска (через запятую):');
       if (inputPhones) {
@@ -484,6 +484,7 @@
       socket.emit('create-group', { name: groupName, members: selectedUids, ownerUid: myProfile.uid });
     });
 
+    // Автоматическое получение новой группы (и когда создаешь ты, и когда добавляют тебя)
     socket.on('group-created', (groupData) => {
       if (!myGroups.some(g => g.id === groupData.id)) {
         myGroups.push(groupData);
@@ -597,6 +598,7 @@
     }
 
     function saveMessageToHistory(msg) {
+      // Корректно высчитываем ключ чата и для группы, и для ЛС
       const chatKey = msg.isGroup ? msg.targetUid : ((msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid);
       const key = getHistoryKey(chatKey);
       const saved = JSON.parse(localStorage.getItem(key) || '[]');
@@ -639,8 +641,10 @@
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    // Прием новых сообщений (файлы, фото, аудио, кружочки, текст)
     socket.on('chat message', (data) => {
       saveMessageToHistory(data);
+      // Если у нас прямо сейчас открыт диалог с отправителем или группа
       if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
         renderMessageUI(data);
       }
@@ -719,7 +723,6 @@
 
         if (confirm('Идет запись голоса... Нажмите ОК для остановки и отправки')) {
           mediaRecorder.start();
-          setTimeout(() => mediaRecorder.stop(), 3000); // автостоп через 3 сек для примера
         }
       } catch(e) { alert('Ошибка доступа к микрофону'); }
     });
@@ -867,4 +870,4 @@
     renderContacts();
   </script>
 </body>
-  </html>
+          </html>
