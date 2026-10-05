@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100 МБ для видео и файлов
+  maxHttpBufferSize: 1e8 // 100 МБ для видео, фото и аудио
 });
 
 app.use(express.static('public'));
@@ -34,8 +34,11 @@ io.on('connection', (socket) => {
     userData.socketIds.add(socket.id);
 
     registeredUsers.set(user.uid, userData);
+    
+    // Подключаем сокет к персональной комнате пользователя (по его UID)
     socket.join(user.uid);
 
+    // Подключаем к комнатам групп, в которых он состоит
     groups.forEach((g) => {
       if (g.members.has(user.uid)) {
         socket.join(g.id);
@@ -87,6 +90,7 @@ io.on('connection', (socket) => {
 
     groups.set(groupId, newGroup);
 
+    // Подключаем онлайн-сокеты всех членов группы к сокет-комнате группы
     membersSet.forEach(mUid => {
       const u = registeredUsers.get(mUid);
       if (u) {
@@ -95,15 +99,16 @@ io.on('connection', (socket) => {
           if (clientSocket) clientSocket.join(groupId);
         });
       }
-    });
-
-    io.to(groupId).emit('group-created', {
-      id: newGroup.id,
-      name: newGroup.name,
-      ownerUid: newGroup.ownerUid,
-      admins: Array.from(newGroup.admins),
-      members: Array.from(newGroup.members),
-      bgImage: newGroup.bgImage
+      
+      // Отправляем уведомительное событие лично каждому участнику, чтобы группа сразу появилась в чатах
+      io.to(mUid).emit('group-created', {
+        id: newGroup.id,
+        name: newGroup.name,
+        ownerUid: newGroup.ownerUid,
+        admins: Array.from(newGroup.admins),
+        members: Array.from(newGroup.members),
+        bgImage: newGroup.bgImage
+      });
     });
   });
 
@@ -137,6 +142,7 @@ io.on('connection', (socket) => {
     };
 
     if (data.isGroup) {
+      // Рассылка по всем участникам группы в сокет-комнату
       io.to(data.targetUid).emit('chat message', msgPayload);
       return;
     }
@@ -150,13 +156,14 @@ io.on('connection', (socket) => {
           senderName: 'ИИ Помощник 🤖',
           targetUid: sender.uid,
           type: 'text',
-          content: `🤖 Ответ на сообщение типа [${data.type}]: ${data.content ? data.content.substring(0, 30) + '...' : ''}`,
+          content: `🤖 Получил ваше сообщение типа [${data.type}]`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }, 500);
       return;
     }
 
+    // Отправляем личное сообщение и отправителю, и получателю
     io.to(sender.uid).emit('chat message', msgPayload);
     io.to(data.targetUid).emit('chat message', msgPayload);
   });
