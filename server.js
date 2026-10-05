@@ -178,7 +178,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ИСПРАВЛЕНИЯ ЗВОНКОВ WEBRTC:
+  // УДАЛЕНИЕ ЧАТА
+  socket.on('delete-chat', ({ chatId, isGroup, userUid }) => {
+    if (isGroup) {
+      groups.delete(chatId);
+      io.to(chatId).emit('chat-deleted', { chatId, isGroup: true });
+    } else {
+      io.to(userUid).emit('chat-deleted', { chatId, isGroup: false });
+      io.to(chatId).emit('chat-deleted', { chatId, isGroup: false });
+    }
+  });
+
+  // WEBRTC ЗВОНКИ
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     if (data.isGroup) {
@@ -202,7 +213,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('make-answer', (data) => {
-    // Отправляем ответ прямо в комнату адресата по UID
     if (data.targetUid) {
       io.to(data.targetUid).emit('call-answered', {
         answer: data.answer,
