@@ -237,6 +237,17 @@
           <option value="#3b82f6">Синий</option>
           <option value="#a855f7">Фиолетовый</option>
         </select>
+
+        <h3>🔔 Рингтон звонка (до 46 МБ)</h3>
+        <label class="call-btn" style="justify-content:center; width:100%; max-width:320px;">
+          📁 Выбрать аудиофайл
+          <input type="file" id="ringtone-input" accept="audio/*" style="display:none;">
+        </label>
+        <div id="ringtone-status" style="font-size:12px; color:var(--text-muted); text-align:center;">Стандартный рингтон</div>
+        <div style="display:flex; gap:8px; width:100%; max-width:320px;">
+          <button id="play-ringtone-btn" class="call-btn" style="flex:1; justify-content:center;">▶ Прослушать</button>
+          <button id="reset-ringtone-btn" class="call-btn danger" style="flex:1; justify-content:center;">Сбросить</button>
+        </div>
       </div>
     </div>
 
@@ -253,7 +264,7 @@
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
-          <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑️</button>
+          <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑️️</button>
           <button class="call-btn" id="start-call-btn">📞 Звонок</button>
         </div>
       </div>
@@ -274,7 +285,7 @@
     </div>
   </div>
 
-  <!-- Модалка просмотра видеокружочка (увеличение + звук) -->
+  <!-- Модалка просмотра видеокружочка (Telegram Style) -->
   <div id="circle-modal" onclick="closeCircleModal()">
     <video id="circle-modal-video" autoplay playsinline></video>
   </div>
@@ -306,7 +317,7 @@
     </div>
   </div>
 
-  <!-- Окно звонка с кнопками микрофона/камеры -->
+  <!-- Окно звонка с кнопками управления -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👤</div>
@@ -389,7 +400,125 @@
     });
 
     // ==========================================
-    // 1. НАСТРОЙКИ ТЕМЫ И ЦВЕТА
+    // INDEXEDDB ДЛЯ РИНГТОНА (До 46 МБ)
+    // ==========================================
+    let db = null;
+    const request = indexedDB.open("KhramMediaDB", 1);
+    request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings");
+      }
+    };
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      loadRingtoneFromDB();
+    };
+
+    let customRingtoneAudio = new Audio();
+    customRingtoneAudio.loop = true;
+    let ringtoneLoaded = false;
+
+    function saveRingtoneToDB(blob, fileName) {
+      if (!db) return;
+      const tx = db.transaction("settings", "readwrite");
+      const store = tx.objectStore("settings");
+      store.put(blob, "custom_ringtone");
+      store.put(fileName, "custom_ringtone_name");
+      tx.oncomplete = () => {
+        loadRingtoneFromDB();
+        alert("Рингтон успешно сохранен!");
+      };
+    }
+
+    function loadRingtoneFromDB() {
+      if (!db) return;
+      const tx = db.transaction("settings", "readonly");
+      const store = tx.objectStore("settings");
+      const getReq = store.get("custom_ringtone");
+      const getNameReq = store.get("custom_ringtone_name");
+
+      getReq.onsuccess = () => {
+        if (getReq.result) {
+          const url = URL.createObjectURL(getReq.result);
+          customRingtoneAudio.src = url;
+          ringtoneLoaded = true;
+        } else {
+          customRingtoneAudio.src = "";
+          ringtoneLoaded = false;
+        }
+      };
+
+      getNameReq.onsuccess = () => {
+        const statusEl = document.getElementById("ringtone-status");
+        if (getNameReq.result) {
+          statusEl.textContent = "Установлен: " + getNameReq.result;
+        } else {
+          statusEl.textContent = "Стандартный рингтон";
+        }
+      };
+    }
+
+    document.getElementById("ringtone-input").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const maxSize = 46 * 1024 * 1024; // 46MB
+      if (file.size > maxSize) {
+        alert("Размер рингтона превышает 46 МБ!");
+        return;
+      }
+
+      saveRingtoneToDB(file, file.name);
+    });
+
+    document.getElementById("play-ringtone-btn").addEventListener("click", () => {
+      if (customRingtoneAudio.paused) {
+        if (!ringtoneLoaded) {
+          alert("Кастомный рингтон не установлен. Используется стандартный.");
+          return;
+        }
+        customRingtoneAudio.play().catch(() => {});
+        document.getElementById("play-ringtone-btn").textContent = "⏸ Пауза";
+      } else {
+        customRingtoneAudio.pause();
+        document.getElementById("play-ringtone-btn").textContent = "▶ Прослушать";
+      }
+    });
+
+    document.getElementById("reset-ringtone-btn").addEventListener("click", () => {
+      if (!db) return;
+      const tx = db.transaction("settings", "readwrite");
+      const store = tx.objectStore("settings");
+      store.delete("custom_ringtone");
+      store.delete("custom_ringtone_name");
+      tx.oncomplete = () => {
+        customRingtoneAudio.pause();
+        customRingtoneAudio.src = "";
+        ringtoneLoaded = false;
+        document.getElementById("ringtone-status").textContent = "Стандартный рингтон";
+        document.getElementById("play-ringtone-btn").textContent = "▶ Прослушать";
+        alert("Рингтон сброшен на стандартный.");
+      };
+    });
+
+    function playCallSound() {
+      if (ringtoneLoaded && customRingtoneAudio.src) {
+        customRingtoneAudio.currentTime = 0;
+        customRingtoneAudio.play().catch(() => {});
+      }
+    }
+
+    function stopCallSound() {
+      if (customRingtoneAudio) {
+        customRingtoneAudio.pause();
+        customRingtoneAudio.currentTime = 0;
+        document.getElementById("play-ringtone-btn").textContent = "▶ Прослушать";
+      }
+    }
+
+    // ==========================================
+    // НАСТРОЙКИ ТЕМЫ И ЦВЕТА
     // ==========================================
     const themeSelect = document.getElementById('theme-select');
     const brandColorSelect = document.getElementById('brand-color-select');
@@ -422,7 +551,7 @@
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
     // ==========================================
-    // 2. ПОИСК ПОЛЬЗОВАТЕЛЕЙ
+    // ПОИСК ПОЛЬЗОВАТЕЛЕЙ
     // ==========================================
     document.getElementById('sync-sim-btn').addEventListener('click', async () => {
       let extractedPhones = [];
@@ -514,7 +643,7 @@
     }
 
     // ==========================================
-    // 3. УДАЛЕНИЕ ЧАТА
+    // УДАЛЕНИЕ ЧАТА
     // ==========================================
     document.getElementById('delete-chat-btn').addEventListener('click', () => {
       if (!currentChatUid) return;
@@ -536,7 +665,7 @@
     });
 
     // ==========================================
-    // 4. УВЕЛИЧЕНИЕ КРУЖКА (TELEGRAM STYLE)
+    // УВЕЛИЧЕНИЕ КРУЖКА (TELEGRAM STYLE)
     // ==========================================
     function playCircleModal(src) {
       const circleModal = document.getElementById('circle-modal');
@@ -556,7 +685,7 @@
     }
 
     // ==========================================
-    // 5. СОЗДАНИЕ ГРУППЫ
+    // СОЗДАНИЕ ГРУППЫ
     // ==========================================
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
@@ -594,7 +723,7 @@
     });
 
     // ==========================================
-    // 6. ФОН ЧАТА
+    // ФОН ЧАТА
     // ==========================================
     const bgModal = document.getElementById('bg-modal');
     document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
@@ -623,7 +752,7 @@
     });
 
     // ==========================================
-    // 7. ГОЛОСОВЫЕ СООБЩЕНИЯ
+    // ГОЛОСОВЫЕ СООБЩЕНИЯ
     // ==========================================
     let mediaRecorderAudio = null;
     let audioChunks = [];
@@ -666,7 +795,7 @@
     });
 
     // ==========================================
-    // 8. ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
+    // ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
     // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
@@ -719,7 +848,7 @@
     });
 
     // ==========================================
-    // 9. ЗВОНКИ И УПРАВЛЕНИЕ МЕДИА (WebRTC)
+    // ЗВОНКИ И УПРАВЛЕНИЕ МЕДИА (WebRTC)
     // ==========================================
     let peerConnection = null;
     let localStream = null;
@@ -798,11 +927,13 @@
     });
 
     socket.on('incoming-call', async (data) => {
+      playCallSound();
       callModal.classList.add('active');
       document.getElementById('call-username').textContent = `Входящий звонок: ${data.fromName}`;
       document.getElementById('accept-call-btn').style.display = 'inline-block';
 
       document.getElementById('accept-call-btn').onclick = async () => {
+        stopCallSound();
         document.getElementById('accept-call-btn').style.display = 'none';
         localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
         localVideo.srcObject = localStream;
@@ -824,6 +955,7 @@
     });
 
     socket.on('call-answered', async (data) => {
+      stopCallSound();
       if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
     });
 
@@ -835,6 +967,7 @@
     socket.on('call-ended', endCall);
 
     function endCall() {
+      stopCallSound();
       if (peerConnection) peerConnection.close();
       if (localStream) localStream.getTracks().forEach(t => t.stop());
       peerConnection = null;
@@ -979,4 +1112,4 @@
     renderContacts();
   </script>
 </body>
-        </html>
+  </html>
