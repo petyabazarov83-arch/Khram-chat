@@ -7,62 +7,42 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Увеличиваем лимит размера передаваемых данных до 100MB для видео/фото/ГС
+// Лимит 100MB для видео, фото и аудио
 const io = new Server(server, {
     maxHttpBufferSize: 1e8
 });
 
 app.use(express.json());
-// Раздаем статические файлы из единственной папки public
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Настройка ключей VAPID для Web Push (фоновые уведомления)
-// Сгенерировать новые ключи можно командой: npx web-push generate-vapid-keys
-const publicVapidKey = 'YOUR_PUBLIC_VAPID_KEY';
-const privateVapidKey = 'YOUR_PRIVATE_VAPID_KEY';
-
-if (publicVapidKey !== 'YOUR_PUBLIC_VAPID_KEY') {
-    webpush.setVapidDetails(
-        'mailto:admin@khram-mess.onrender.com',
-        publicVapidKey,
-        privateVapidKey
-    );
-}
 
 // Хранилище подписок на фоновые Push-уведомления
 let pushSubscriptions = [];
 
-// Эндпоинт для подписки на фоновые Push-уведомления
 app.post('/subscribe', (req, res) => {
     const subscription = req.body;
     pushSubscriptions.push(subscription);
     res.status(201).json({});
 });
 
-// Функция отправки фонового push-уведомления на устройство
 function sendPushNotification(title, body) {
     const payload = JSON.stringify({ title, body });
     pushSubscriptions.forEach((sub, index) => {
         webpush.sendNotification(sub, payload).catch((err) => {
-            console.error('Ошибка отправки Push:', err);
-            pushSubscriptions.splice(index, 1); // Удаляем недействительные подписки
+            pushSubscriptions.splice(index, 1);
         });
     });
 }
 
-// --- Socket.IO Обработка подключений и событий ---
+// Socket.IO
 io.on('connection', (socket) => {
-    console.log('Пользователь подключен:', socket.id);
+    console.log('Пользователь подключился:', socket.id);
 
-    // 1. Прием и рассылка сообщений (текст, фото, аудио, кружочки, файлы)
     socket.on('sendMessage', (data) => {
-        // data включает: type ('text'|'image'|'audio'|'circle'|'file'), content, name
         io.emit('newMessage', {
             sender: socket.id,
             ...data
         });
 
-        // Если браузер свернут, отправляем Push-уведомление
         let notifText = 'Новое сообщение';
         if (data.type === 'image') notifText = '📷 Новое фото';
         if (data.type === 'audio') notifText = '🎤 Голосовое сообщение';
@@ -72,13 +52,13 @@ io.on('connection', (socket) => {
         sendPushNotification('Khram Messenger', notifText);
     });
 
-    // 2. WebRTC Сигнализация для видеозвонков
+    // WebRTC Сигнализация
     socket.on('callUser', (data) => {
         socket.broadcast.emit('incomingCall', {
             from: socket.id,
             offer: data.offer
         });
-        sendPushNotification('Входящий звонок', 'Вам кто-то звонит в Khram Messenger!');
+        sendPushNotification('Входящий звонок', 'Вам кто-то звонит!');
     });
 
     socket.on('answerCall', (data) => {
@@ -98,8 +78,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// Запуск сервера на порту 3000 или порту от Render
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Сервер успешно запущен на порту ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
