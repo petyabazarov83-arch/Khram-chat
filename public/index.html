@@ -844,10 +844,31 @@
       reader.readAsDataURL(file);
     });
 
+    // ИСПРАВЛЕНА ЛОГИКА ПРИЕМА СООБЩЕНИЙ
     socket.on('chat message', (msg) => {
-      const chatKeyUid = (msg.isGroup || msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
+      let chatKeyUid;
+
+      if (msg.isGroup) {
+        chatKeyUid = msg.targetUid;
+      } else {
+        // Если отправитель я, сохраняем в чат с получателем, иначе в чат с отправителем
+        chatKeyUid = (msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
+
+        // Если нам написал неизвестный ранее контакт, автоматически добавляем его в список
+        if (msg.senderUid !== myProfile.uid && !contacts.some(c => c.uid === msg.senderUid)) {
+          contacts.push({
+            uid: msg.senderUid,
+            name: msg.senderName || 'Пользователь',
+            avatar: msg.senderAvatar || ''
+          });
+          localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+          renderContacts();
+        }
+      }
+
       saveMessageToHistory(chatKeyUid, msg);
 
+      // Если в момент получения открыт чат с этим отправителем/группой — отображаем сообщение
       if (currentChatUid === chatKeyUid) {
         appendMessageToUI(msg);
       }
