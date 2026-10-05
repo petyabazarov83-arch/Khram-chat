@@ -81,7 +81,7 @@
     .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #6e7681; display: inline-block; margin-right: 6px; }
     .status-dot.online { background: #22c55e; }
 
-    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background-size: cover; background-position: center; min-height: 200px; }
+    #messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background-size: cover; background-position: center; }
 
     .bg-preset-1 { background: linear-gradient(135deg, #0f172a, #1e293b); }
     .bg-preset-2 { background: linear-gradient(135deg, #18181b, #27272a); }
@@ -147,7 +147,7 @@
       </div>
       <div>
         <button class="btn-icon" id="create-group-btn" title="Создать групповой чат">👥+</button>
-        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов">📱+</button>
+        <button class="btn-icon" id="sync-sim-btn" title="Импорт контактов по номерам">📱+</button>
       </div>
     </header>
 
@@ -160,14 +160,6 @@
     <!-- Чаты -->
     <div id="chats-page" class="page active">
       <div id="chat-list">
-        <div class="chat-item" id="default-hram-chat">
-          <div class="chat-avatar" style="background:#f59e0b; color:#000;">👥</div>
-          <div>
-            <strong>храм</strong>
-            <div style="font-size:12px; color:var(--text-muted);">Групповой чат</div>
-          </div>
-        </div>
-
         <div class="chat-item" id="bot-chat-item">
           <div class="chat-avatar">🤖</div>
           <div>
@@ -228,7 +220,7 @@
       </div>
     </div>
 
-    <!-- Окно чата -->
+    <!-- Чат окно -->
     <div id="chat-window-modal" class="page">
       <div id="chat-header" style="background:var(--bg-panel); padding:8px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
         <button class="btn-icon" id="close-chat-btn">←</button>
@@ -261,7 +253,7 @@
     </div>
   </div>
 
-  <!-- Звонок -->
+  <!-- Окно звонка -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👤</div>
@@ -282,7 +274,7 @@
     </div>
   </div>
 
-  <!-- Запись видеокружочка -->
+  <!-- Запись кружка -->
   <div id="record-modal">
     <video id="circle-preview" autoplay playsinline muted></video>
     <div style="display:flex; gap:10px;">
@@ -297,9 +289,9 @@
   <script>
     const socket = io();
     let swRegistration = null;
-    let callTimeoutTimer = null;
+    let callTimeoutTimer = null; // Таймер ожидания звонка на 45 сек
 
-    // Push-уведомление + Принятие звонка из системной панели
+    // Регистрация Service Worker для Push-уведомлений с кнопкой «Ответить» при свернутом браузере
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
         swRegistration = reg;
@@ -331,6 +323,37 @@
       }
     }
 
+    // Хранилище IndexedDB для рингтона
+    const dbReq = indexedDB.open("KhramMediaDB", 1);
+    let db = null;
+    dbReq.onupgradeneeded = e => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("ringtones")) db.createObjectStore("ringtones");
+    };
+    dbReq.onsuccess = e => {
+      db = e.target.result;
+      loadSavedRingtone();
+    };
+
+    function saveRingtoneToDB(dataUrl) {
+      if (!db) return;
+      const tx = db.transaction("ringtones", "readwrite");
+      tx.objectStore("ringtones").put(dataUrl, "userRingtone");
+    }
+
+    function loadSavedRingtone() {
+      if (!db) return;
+      const tx = db.transaction("ringtones", "readonly");
+      const req = tx.objectStore("ringtones").get("userRingtone");
+      req.onsuccess = () => {
+        if (req.result) {
+          const ringtoneAudio = document.getElementById('custom-ringtone');
+          ringtoneAudio.src = req.result;
+          document.getElementById('ringtone-status').textContent = '🎵 Выбранный рингтон сохранён';
+        }
+      };
+    }
+
     let myProfile = {
       uid: localStorage.getItem('khram_uid') || ('khram-user-' + Math.random().toString(36).substring(2, 8)),
       username: localStorage.getItem('khram_username') || 'Путник',
@@ -342,6 +365,27 @@
     document.getElementById('my-uid').textContent = myProfile.uid;
     document.getElementById('username-input').value = myProfile.username;
     document.getElementById('phone-input').value = myProfile.phone;
+
+    const savedTheme = localStorage.getItem('khram_theme') || 'dark';
+    if (savedTheme === 'light') document.body.classList.add('light-theme');
+    document.getElementById('theme-select').value = savedTheme;
+
+    const savedBrandColor = localStorage.getItem('khram_brand_color') || '#f59e0b';
+    document.documentElement.style.setProperty('--brand-color', savedBrandColor);
+    document.getElementById('brand-color-select').value = savedBrandColor;
+
+    document.getElementById('theme-select').addEventListener('change', (e) => {
+      const theme = e.target.value;
+      localStorage.setItem('khram_theme', theme);
+      if (theme === 'light') document.body.classList.add('light-theme');
+      else document.body.classList.remove('light-theme');
+    });
+
+    document.getElementById('brand-color-select').addEventListener('change', (e) => {
+      const color = e.target.value;
+      localStorage.setItem('khram_brand_color', color);
+      document.documentElement.style.setProperty('--brand-color', color);
+    });
 
     function updateMyAvatarDisplay() {
       if (myProfile.avatar) {
@@ -378,6 +422,75 @@
       }
     });
 
+    document.getElementById('sync-sim-btn').addEventListener('click', () => {
+      const inputPhones = prompt('Введите номера телефонов для поиска (через запятую):');
+      if (inputPhones) {
+        const phoneArray = inputPhones.split(',').map(p => p.trim());
+        socket.emit('sync-contacts', phoneArray);
+      }
+    });
+
+    socket.on('contacts-synced', (foundContacts) => {
+      let addedCount = 0;
+      foundContacts.forEach(fc => {
+        if (fc.uid !== myProfile.uid && !contacts.some(c => c.uid === fc.uid)) {
+          contacts.push({ uid: fc.uid, name: fc.name, avatar: fc.avatar });
+          addedCount++;
+        }
+      });
+      localStorage.setItem('khram_contacts', JSON.stringify(contacts));
+      renderContacts();
+      alert(`Найдено и добавлено контактов: ${addedCount}`);
+    });
+
+    const ringtoneAudio = document.getElementById('custom-ringtone');
+    let audioCtx = null, synthInterval = null;
+
+    function playSystemRingtone() {
+      if (ringtoneAudio.src) {
+        ringtoneAudio.currentTime = 0;
+        ringtoneAudio.play().catch(e => console.log('Ошибка проигрывания рингтона:', e));
+        return;
+      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      function pulse() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      }
+      pulse();
+      synthInterval = setInterval(pulse, 1600);
+    }
+
+    function stopSystemRingtone() {
+      if (ringtoneAudio.src) {
+        ringtoneAudio.pause();
+        ringtoneAudio.currentTime = 0;
+      }
+      if (synthInterval) clearInterval(synthInterval);
+    }
+
+    document.getElementById('ringtone-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          saveRingtoneToDB(evt.target.result);
+          ringtoneAudio.src = evt.target.result;
+          document.getElementById('ringtone-status').textContent = '🎵 Рингтон сохранен!';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
     function switchTab(pageId, targetBtn) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -393,21 +506,11 @@
     let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
     let activeOnlineUids = [];
 
-    // Чат "храм" по умолчанию
-    document.getElementById('default-hram-chat').addEventListener('click', () => {
-      openChat('group-hram-main', 'храм', '', true);
-    });
-
-    document.getElementById('bot-chat-item').addEventListener('click', () => {
-      openChat('bot-assistant', 'ИИ Помощник 🤖', '', false);
-    });
-
     function renderContacts() {
       const chatList = document.getElementById('chat-list');
       chatList.querySelectorAll('.dynamic-item').forEach(el => el.remove());
 
       myGroups.forEach(g => {
-        if (g.id === 'group-hram-main') return;
         const div = document.createElement('div');
         div.className = 'chat-item dynamic-item';
         div.addEventListener('click', () => openChat(g.id, g.name, '', true));
@@ -439,6 +542,30 @@
       });
     }
 
+    document.getElementById('bot-chat-item').addEventListener('click', () => openChat('bot-assistant', 'ИИ Помощник 🤖', '', false));
+
+    document.getElementById('create-group-btn').addEventListener('click', () => {
+      const groupName = prompt('Введите название группы:');
+      if (!groupName) return;
+
+      const selectedUids = [];
+      contacts.forEach(c => {
+        if (confirm(`Добавить ${c.name} в группу?`)) {
+          selectedUids.push(c.uid);
+        }
+      });
+
+      socket.emit('create-group', { name: groupName, members: selectedUids, ownerUid: myProfile.uid });
+    });
+
+    socket.on('group-created', (groupData) => {
+      if (!myGroups.some(g => g.id === groupData.id)) {
+        myGroups.push(groupData);
+        localStorage.setItem('khram_groups', JSON.stringify(myGroups));
+        renderContacts();
+      }
+    });
+
     let currentChatUid = '', isCurrentGroup = false;
 
     function openChat(uid, title, avatar, isGroup = false) {
@@ -452,6 +579,7 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('chat-window-modal').classList.add('active');
 
+      applyChatBackground();
       updateActiveChatStatus();
       loadHistory();
     }
@@ -463,6 +591,46 @@
       isCurrentGroup = false;
     }
     document.getElementById('close-chat-btn').addEventListener('click', closeChat);
+
+    document.getElementById('bg-settings-btn').addEventListener('click', () => {
+      if (isCurrentGroup) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              const bgUrl = evt.target.result;
+              socket.emit('update-group-bg', { groupId: currentChatUid, bgImage: bgUrl, userUid: myProfile.uid });
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        fileInput.click();
+      } else {
+        const choice = prompt('Выберите фон (1, 2, 3, 4):');
+        if (['1','2','3','4'].includes(choice)) {
+          localStorage.setItem(`bg_chat_${currentChatUid}`, `bg-preset-${choice}`);
+          applyChatBackground();
+        }
+      }
+    });
+
+    function applyChatBackground() {
+      const msgBox = document.getElementById('messages');
+      msgBox.style.backgroundImage = '';
+      msgBox.className = '';
+
+      if (isCurrentGroup) {
+        const g = myGroups.find(group => group.id === currentChatUid);
+        if (g && g.bgImage) msgBox.style.backgroundImage = `url(${g.bgImage})`;
+      } else {
+        const preset = localStorage.getItem(`bg_chat_${currentChatUid}`);
+        if (preset) msgBox.classList.add(preset);
+      }
+    }
 
     function updateActiveChatStatus() {
       if (!currentChatUid) return;
@@ -480,8 +648,8 @@
       }
     }
 
-    function getHistoryKey(chatId) {
-      return `chat_history_${myProfile.uid}_${chatId}`;
+    function getHistoryKey(uid) {
+      return `chat_history_${myProfile.uid}_${uid}`;
     }
 
     function loadHistory() {
@@ -495,7 +663,7 @@
       const chatKey = msg.isGroup ? msg.targetUid : ((msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid);
       const key = getHistoryKey(chatKey);
       const saved = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!saved.some(m => String(m.id) === String(msg.id))) {
+      if (!saved.some(m => m.id === msg.id)) {
         saved.push(msg);
         localStorage.setItem(key, JSON.stringify(saved));
       }
@@ -505,7 +673,8 @@
 
     function renderMessageUI(data) {
       if (!data) return;
-      if (document.getElementById(`msg-${data.id}`)) return;
+      const existingMsg = document.getElementById(`msg-${data.id}`);
+      if (existingMsg) return;
 
       const isMine = data.senderUid === myProfile.uid;
       const div = document.createElement('div');
@@ -562,10 +731,7 @@
 
     socket.on('chat message', (data) => {
       saveMessageToHistory(data);
-      const isForCurrentGroup = data.isGroup && data.targetUid === currentChatUid;
-      const isForCurrentDM = !data.isGroup && (data.senderUid === currentChatUid || data.targetUid === currentChatUid);
-
-      if (isForCurrentGroup || isForCurrentDM) {
+      if (currentChatUid && (data.senderUid === currentChatUid || data.targetUid === currentChatUid)) {
         renderMessageUI(data);
       }
     });
@@ -600,7 +766,7 @@
     document.getElementById('send-btn').addEventListener('click', sendText);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendText(); });
 
-    // Отправка любых файлов и картинок
+    // Отправка файлов / фото
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -621,7 +787,7 @@
       reader.readAsDataURL(file);
     });
 
-    // Запись голосовых
+    // Голосовые сообщения
     let audioRecorder, audioChunks = [], isAudioRecording = false;
     const recAudioBtn = document.getElementById('record-audio-btn');
 
@@ -662,7 +828,7 @@
       }
     });
 
-    // Видеокружочки
+    // Кружочки
     let circleStream, circleRecorder, circleChunks = [];
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
@@ -708,26 +874,78 @@
       recordModal.style.display = 'none';
     });
 
-    // WebRTC Звонки
+    // WebRTC Звонки с таймаутом на 45 секунд
     let peerConnection, localStream;
+    let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
     const remoteVideo = document.getElementById('remote-video');
     const localVideo = document.getElementById('local-video');
     const acceptCallBtn = document.getElementById('accept-call-btn');
+    const toggleMicBtn = document.getElementById('toggle-mic-btn');
+    const toggleCamBtn = document.getElementById('toggle-cam-btn');
+    const switchCamBtn = document.getElementById('switch-cam-btn');
     let callTargetSocketId = null;
 
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    async function setupCallMedia() {
+    async function setupCallMedia(facing = 'user') {
       if (localStream) localStream.getTracks().forEach(t => t.stop());
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: facing }, 
+        audio: true 
+      });
       localVideo.srcObject = localStream;
+      currentFacingMode = facing;
+      
+      toggleMicBtn.classList.remove('off');
+      toggleCamBtn.classList.remove('off');
+    }
+
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          toggleMicBtn.classList.toggle('off', !audioTrack.enabled);
+        }
+      }
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          toggleCamBtn.classList.toggle('off', !videoTrack.enabled);
+        }
+      }
+    });
+
+    switchCamBtn.addEventListener('click', async () => {
+      const newFacing = (currentFacingMode === 'user') ? 'environment' : 'user';
+      await setupCallMedia(newFacing);
+      if (peerConnection) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender && videoTrack) {
+          sender.replaceTrack(videoTrack);
+        }
+      }
+    });
+
+    function startCallTimeout() {
+      clearTimeout(callTimeoutTimer);
+      callTimeoutTimer = setTimeout(() => {
+        alert('Собеседник не ответил (Время ожидания истекло - 45 сек)');
+        socket.emit('end-call', { targetUid: currentChatUid, reason: 'timeout' });
+        closeCall();
+      }, 45000);
     }
 
     document.getElementById('start-call-btn').addEventListener('click', async () => {
       if (!currentChatUid) return;
       callModal.style.display = 'flex';
-      await setupCallMedia();
+      await setupCallMedia('user');
 
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
@@ -738,6 +956,8 @@
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       socket.emit('call-user', { targetUid: currentChatUid, senderUid: myProfile.uid, offer, isGroup: isCurrentGroup });
+
+      startCallTimeout();
     });
 
     socket.on('incoming-call', async (data) => {
@@ -746,13 +966,18 @@
       callModal.style.display = 'flex';
       acceptCallBtn.style.display = 'flex';
 
+      playSystemRingtone();
       sendCallNotification(data.fromName || 'Собеседник', data.fromAvatar);
+
       window.incomingOffer = data.offer;
+      startCallTimeout();
     });
 
     async function acceptCallAction() {
+      clearTimeout(callTimeoutTimer);
+      stopSystemRingtone();
       acceptCallBtn.style.display = 'none';
-      await setupCallMedia();
+      await setupCallMedia('user');
 
       peerConnection = new RTCPeerConnection(rtcConfig);
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
@@ -770,6 +995,7 @@
     acceptCallBtn.addEventListener('click', acceptCallAction);
 
     socket.on('call-answered', async (data) => {
+      clearTimeout(callTimeoutTimer);
       if (peerConnection) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
       }
@@ -782,6 +1008,8 @@
     });
 
     function closeCall() {
+      clearTimeout(callTimeoutTimer);
+      stopSystemRingtone();
       if (peerConnection) { peerConnection.close(); peerConnection = null; }
       if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
       remoteVideo.srcObject = null;
