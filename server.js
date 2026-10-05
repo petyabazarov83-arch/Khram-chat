@@ -25,6 +25,13 @@ function broadcastOnlineUsers() {
   io.emit('online-users-list', Array.from(new Set(onlineUids)));
 }
 
+// Вспомогательная функция для получения последних 10 цифр номера (без +7/8)
+function normalizePhone10(phoneStr) {
+  if (!phoneStr) return '';
+  const digits = String(phoneStr).replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
 io.on('connection', (socket) => {
 
   socket.on('register', (user) => {
@@ -36,7 +43,7 @@ io.on('connection', (socket) => {
     userData.uid = user.uid;
     userData.username = user.username || 'Путник';
     userData.avatar = user.avatar || '';
-    userData.phone = user.phone ? user.phone.replace(/\D/g, '') : '';
+    userData.phone = user.phone ? String(user.phone).replace(/\D/g, '') : '';
     userData.socketIds.add(socket.id);
 
     registeredUsers.set(user.uid, userData);
@@ -59,20 +66,28 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ИСПРАВЛЕННЫЙ ПОИСК И СИНХРОНИЗАЦИЯ ПО НОМЕРУ ТЕЛЕФОНА
   socket.on('sync-contacts', (phoneNumbers) => {
     if (!Array.isArray(phoneNumbers)) return;
 
-    const normalizedPhones = phoneNumbers.map(p => String(p).replace(/\D/g, '')).filter(Boolean);
+    // Нормализуем входящие номера до последних 10 цифр
+    const searchPhones10 = phoneNumbers
+      .map(p => normalizePhone10(p))
+      .filter(Boolean);
+
     const matchedUsers = [];
 
     registeredUsers.forEach((u) => {
-      if (u.phone && normalizedPhones.includes(u.phone)) {
-        matchedUsers.push({
-          uid: u.uid,
-          name: u.username,
-          avatar: u.avatar,
-          phone: u.phone
-        });
+      if (u.phone) {
+        const userPhone10 = normalizePhone10(u.phone);
+        if (userPhone10 && searchPhones10.includes(userPhone10)) {
+          matchedUsers.push({
+            uid: u.uid,
+            name: u.username,
+            avatar: u.avatar,
+            phone: u.phone
+          });
+        }
       }
     });
 
