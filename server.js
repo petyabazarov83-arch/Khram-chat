@@ -1,11 +1,18 @@
 const express = require('express');
+const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
   cors: { origin: "*" }
 });
 
+// 1. Раздаем все статические файлы из текущей папки
 app.use(express.static(__dirname));
+
+// 2. Главный маршрут: явно отдаем index.html при заходе на "/"
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 let users = {}; // uid -> socket.id
 
@@ -55,6 +62,7 @@ io.on('connection', (socket) => {
   });
 });
 
-http.listen(3000, '0.0.0.0', () => {
-  console.log('Сервер Храм запущен на порту 3000');
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, '0.0.0.0', () => {
+  console.log(`Сервер Храм успешно запущен на порту ${PORT}`);
 });
