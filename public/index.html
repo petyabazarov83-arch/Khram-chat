@@ -291,11 +291,11 @@
     let swRegistration = null;
     let callTimeoutTimer = null; // Таймер ожидания звонка на 45 сек
 
-    // Регистрация Service Worker для Push-уведомлений с кнопкой «Ответить» при свернутом браузере
+    // Регистрация Service Worker для Push-уведомлений с кнопкой «Ответить»
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
         swRegistration = reg;
-      });
+      }).catch(err => console.log('SW reg error:', err));
 
       navigator.serviceWorker.addEventListener('message', event => {
         if (event.data && event.data.action === 'accept_incoming_call') {
@@ -449,7 +449,7 @@
     function playSystemRingtone() {
       if (ringtoneAudio.src) {
         ringtoneAudio.currentTime = 0;
-        ringtoneAudio.play().catch(e => console.log('Ошибка проигрывания рингтона:', e));
+        ringtoneAudio.play().catch(e => console.log('Ошибка рингтона:', e));
         return;
       }
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -874,7 +874,7 @@
       recordModal.style.display = 'none';
     });
 
-    // WebRTC Звонки с таймаутом на 45 секунд
+    // WebRTC Звонки (ФИКС: правильный обмен SDP и ICE через UID)
     let peerConnection, localStream;
     let currentFacingMode = 'user';
     const callModal = document.getElementById('call-modal');
@@ -884,7 +884,6 @@
     const toggleMicBtn = document.getElementById('toggle-mic-btn');
     const toggleCamBtn = document.getElementById('toggle-cam-btn');
     const switchCamBtn = document.getElementById('switch-cam-btn');
-    let callTargetSocketId = null;
 
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -951,7 +950,11 @@
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
 
       peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
-      peerConnection.onicecandidate = e => { if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate }); };
+      
+      // Отправляем кандидатов через targetUid
+      peerConnection.onicecandidate = e => { 
+        if (e.candidate) socket.emit('ice-candidate', { targetUid: currentChatUid, candidate: e.candidate }); 
+      };
 
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
@@ -961,7 +964,6 @@
     });
 
     socket.on('incoming-call', async (data) => {
-      callTargetSocketId = data.fromSocketId;
       document.getElementById('call-username').textContent = data.fromName || 'Входящий звонок';
       callModal.style.display = 'flex';
       acceptCallBtn.style.display = 'flex';
@@ -970,6 +972,7 @@
       sendCallNotification(data.fromName || 'Собеседник', data.fromAvatar);
 
       window.incomingOffer = data.offer;
+      window.callerUid = data.fromUid; // Сохраняем UID звонящего
       startCallTimeout();
     });
 
@@ -983,13 +986,18 @@
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
 
       peerConnection.ontrack = e => { if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0]; };
-      peerConnection.onicecandidate = e => { if (e.candidate) socket.emit('ice-candidate', { toSocketId: callTargetSocketId, candidate: e.candidate }); };
+      
+      // Отправляем кандидатов звонящему через его targetUid
+      peerConnection.onicecandidate = e => { 
+        if (e.candidate) socket.emit('ice-candidate', { targetUid: window.callerUid, candidate: e.candidate }); 
+      };
 
       await peerConnection.setRemoteDescription(new RTCSessionDescription(window.incomingOffer));
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
-      socket.emit('make-answer', { toSocketId: callTargetSocketId, answer });
+      // Отправляем ответ с использованием targetUid
+      socket.emit('make-answer', { targetUid: window.callerUid, answer });
     }
 
     acceptCallBtn.addEventListener('click', acceptCallAction);
@@ -1019,7 +1027,7 @@
     }
 
     document.getElementById('end-call-btn').addEventListener('click', () => {
-      socket.emit('end-call', { targetUid: currentChatUid });
+      socket.emit('end-call', { targetUid: currentChatUid || window.callerUid });
       closeCall();
     });
 
