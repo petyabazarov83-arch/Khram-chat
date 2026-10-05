@@ -6,13 +6,13 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Увеличиваем лимиты размера передаваемых данных
+// Увеличиваем лимиты размера передаваемых данных в HTTP-запросах
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
-// Настройки WebSocket для поддержки передачи файлов и работы под Render
+// Настройки WebSocket для поддержки передачи крупных файлов, видеокружков и групповых звонков
 const io = new Server(server, {
-  maxHttpBufferSize: 1e9, // Лимит 1 ГБ на пакет
+  maxHttpBufferSize: 1e8, // Лимит 100 МБ на один WebSocket-пакет
   pingTimeout: 60000,     // 60 секунд ожидания ответа
   pingInterval: 25000,    // Пинг каждые 25 секунд
   cors: {
@@ -63,9 +63,10 @@ io.on('connection', (socket) => {
 
     registeredUsers.set(user.uid, userData);
     
+    // Подключаем сокет к личной комнате пользователя
     socket.join(user.uid);
 
-    // Присоединяем к ранее созданным группам
+    // Подключаем сокет ко всем группам, членом которых является пользователь
     groups.forEach((g) => {
       if (g.members && g.members.has(user.uid)) {
         socket.join(g.id);
@@ -224,7 +225,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Звонки (личные и групповые)
+  // ==========================================
+  // ЗВОНКИ (ЛИЧНЫЕ И ГРУППОВЫЕ WEBRTC)
+  // ==========================================
   socket.on('call-user', (data) => {
     const sender = registeredUsers.get(data.senderUid);
     const payload = {
@@ -244,62 +247,36 @@ io.on('connection', (socket) => {
   });
 
   socket.on('make-answer', (data) => {
+    const senderUid = socketToUid.get(socket.id);
+    const payload = {
+      answer: data.answer,
+      fromUid: senderUid
+    };
+
     if (data.isGroup) {
-      socket.to(data.targetUid).emit('call-answered', {
-        answer: data.answer,
-        fromUid: socketToUid.get(socket.id)
-      });
+      socket.to(data.targetUid).emit('call-answered', payload);
     } else if (data.targetUid) {
-      io.to(data.targetUid).emit('call-answered', {
-        answer: data.answer,
-        fromUid: socketToUid.get(socket.id)
-      });
+      io.to(data.targetUid).emit('call-answered', payload);
     }
   });
 
   socket.on('ice-candidate', (data) => {
+    const senderUid = socketToUid.get(socket.id);
+    const payload = {
+      candidate: data.candidate,
+      fromUid: senderUid
+    };
+
     if (data.isGroup) {
-      socket.to(data.targetUid).emit('ice-candidate', {
-        candidate: data.candidate,
-        fromUid: socketToUid.get(socket.id)
-      });
+      socket.to(data.targetUid).emit('ice-candidate', payload);
     } else if (data.targetUid) {
-      io.to(data.targetUid).emit('ice-candidate', {
-        candidate: data.candidate,
-        fromUid: socketToUid.get(socket.id)
-      });
+      io.to(data.targetUid).emit('ice-candidate', payload);
     }
   });
 
   socket.on('end-call', (data) => {
+    const senderUid = socketToUid.get(socket.id);
     if (data.targetUid) {
       if (data.isGroup) {
         socket.to(data.targetUid).emit('call-ended', {
-          fromUid: socketToUid.get(socket.id),
-          reason: data.reason || 'ended'
-        });
-      } else {
-        io.to(data.targetUid).emit('call-ended', { reason: data.reason || 'ended' });
-      }
-    }
-  });
-
-  socket.on('disconnect', () => {
-    const uid = socketToUid.get(socket.id);
-    if (uid && registeredUsers.has(uid)) {
-      const u = registeredUsers.get(uid);
-      if (u.socketIds) u.socketIds.delete(socket.id);
-    }
-    socketToUid.delete(socket.id);
-    broadcastOnlineUsers();
-  });
-});
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Сервер Храма запущен на порту ${PORT}`);
-});
+          fromUid:
