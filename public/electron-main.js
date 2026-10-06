@@ -1,1 +1,25 @@
+const { app, BrowserWindow } = require('electron');
+const path = require('path');
 
+function createWindow () {
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    fullscreen: false, // Можно поставить true, если нужно сразу на весь экран
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Загружаем твой index.html
+  win.loadFile('index.html');
+}
+
+app.whenReady().then(createWindow);
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
