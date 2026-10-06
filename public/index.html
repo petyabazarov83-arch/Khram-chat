@@ -111,6 +111,17 @@
     .btn-icon { background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-main); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; user-select: none; }
     .btn-icon.active-rec { background: #ef4444; color: white; animation: pulse 1s infinite; }
 
+    .rec-timer {
+      font-size: 12px;
+      color: #ef4444;
+      font-weight: bold;
+      margin-left: 4px;
+      display: none;
+    }
+    .rec-timer.active {
+      display: inline-block;
+    }
+
     @keyframes pulse {
       0% { transform: scale(1); }
       50% { transform: scale(1.1); }
@@ -190,7 +201,25 @@
       flex-direction: column; align-items: center; justify-content: center; gap: 15px; z-index: 1000;
     }
     #record-modal.active { display: flex !important; }
-    #circle-preview { width: 220px; height: 220px; border-radius: 50%; border: 4px solid var(--brand-color); object-fit: cover; background: #000; }
+    #circle-preview-wrapper {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+    #circle-preview {
+      width: 220px; height: 220px; border-radius: 50%; border: 4px solid var(--brand-color); object-fit: cover; background: #000;
+    }
+    .circle-recording-overlay {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(239, 68, 68, 0.8);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -309,6 +338,7 @@
             📎<input type="file" id="file-input" style="display:none;" accept="*/*">
           </label>
           <button class="btn-icon" id="record-audio-btn" title="Голосовое сообщение">🎤</button>
+          <span id="audio-timer" class="rec-timer">00:00</span>
           <button class="btn-icon" id="record-circle-btn" title="Видеокружочек">⭕</button>
           <input id="input" autocomplete="off" placeholder="Сообщение..." />
           <button class="btn-icon btn-send" id="send-btn">➔</button>
@@ -374,7 +404,10 @@
 
   <!-- Запись кружка -->
   <div id="record-modal">
-    <video id="circle-preview" autoplay playsinline muted></video>
+    <div id="circle-preview-wrapper">
+      <video id="circle-preview" autoplay playsinline muted></video>
+      <div id="circle-rec-timer" class="circle-recording-overlay">00:00</div>
+    </div>
     <div style="display:flex; gap:10px;">
       <button class="call-btn danger" id="cancel-record-btn">Отмена</button>
       <button class="call-btn" id="stop-record-btn">Отправить</button>
@@ -385,6 +418,12 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg error:', err));
+      });
+    }
+
     const socket = io();
 
     let myProfile = {
@@ -707,7 +746,7 @@
     });
 
     // ==========================================
-    // ЛОГИКА ОКНА ЧАТА И СООБЩЕНИЙ
+    // ЛОГИКА ОКНА ЧАТА И СООБЩЕНИЙ (ИСПРАВЛЕНО ОТОБРАЖЕНИЕ)
     // ==========================================
     let currentChatUid = null;
     let isCurrentGroup = false;
@@ -776,7 +815,7 @@
 
       const msgDiv = document.createElement('div');
       msgDiv.className = `msg ${isMine ? 'mine' : 'other'}`;
-      msgDiv.dataset.id = msg.id;
+      if (msg.id) msgDiv.dataset.id = msg.id;
 
       let contentHTML = '';
 
@@ -807,12 +846,17 @@
       const text = input.value.trim();
       if (!text || !currentChatUid) return;
 
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
       const msgData = {
         senderUid: myProfile.uid,
+        senderName: myProfile.username,
         targetUid: currentChatUid,
         isGroup: isCurrentGroup,
         type: 'text',
-        content: text
+        content: text,
+        timestamp: timeStr
       };
 
       socket.emit('chat message', msgData);
@@ -829,32 +873,38 @@
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
 
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
       const reader = new FileReader();
       reader.onload = (evt) => {
         socket.emit('chat message', {
           senderUid: myProfile.uid,
+          senderName: myProfile.username,
           targetUid: currentChatUid,
           isGroup: isCurrentGroup,
           type: 'file',
           content: evt.target.result,
           fileName: file.name,
-          fileSize: file.size
+          fileSize: file.size,
+          timestamp: timeStr
         });
       };
       reader.readAsDataURL(file);
     });
 
-    // ИСПРАВЛЕНА ЛОГИКА ПРИЕМА СООБЩЕНИЙ
+    /* ИСПРАВЛЕННЫЙ ОБРАБОТЧИК ПОЛУЧЕНИЯ СООБЩЕНИЙ */
     socket.on('chat message', (msg) => {
       let chatKeyUid;
 
       if (msg.isGroup) {
+        // Для групповых чатов ключ — это ID самой группы
         chatKeyUid = msg.targetUid;
       } else {
-        // Если отправитель я, сохраняем в чат с получателем, иначе в чат с отправителем
+        // Для личных сообщений ключ — это противоположный UID
         chatKeyUid = (msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
 
-        // Если нам написал неизвестный ранее контакт, автоматически добавляем его в список
+        // Если пришло личное сообщение от неизвестного пользователя — добавим в контакты
         if (msg.senderUid !== myProfile.uid && !contacts.some(c => c.uid === msg.senderUid)) {
           contacts.push({
             uid: msg.senderUid,
@@ -866,9 +916,10 @@
         }
       }
 
+      // 1. Всегда сохраняем полученное/отправленное сообщение в локальную историю устройства
       saveMessageToHistory(chatKeyUid, msg);
 
-      // Если в момент получения открыт чат с этим отправителем/группой — отображаем сообщение
+      // 2. Отображаем его в реальном времени, если данный чат открыт прямо сейчас
       if (currentChatUid === chatKeyUid) {
         appendMessageToUI(msg);
       }
@@ -985,16 +1036,28 @@
     });
 
     // ==========================================
-    // ГОЛОСОВЫЕ СООБЩЕНИЯ
+    // ГОЛОСОВЫЕ СООБЩЕНИЯ (С ТАЙМЕРОМ)
     // ==========================================
     let mediaRecorderAudio = null;
     let audioChunks = [];
+    let audioTimerInterval = null;
+    let audioSeconds = 0;
+
     const recordAudioBtn = document.getElementById('record-audio-btn');
+    const audioTimerEl = document.getElementById('audio-timer');
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
 
     recordAudioBtn.addEventListener('click', async () => {
       if (mediaRecorderAudio && mediaRecorderAudio.state === 'recording') {
         mediaRecorderAudio.stop();
         recordAudioBtn.classList.remove('active-rec');
+        audioTimerEl.classList.remove('active');
+        clearInterval(audioTimerInterval);
         return;
       }
 
@@ -1006,14 +1069,19 @@
         mediaRecorderAudio.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorderAudio.onstop = () => {
           const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const now = new Date();
+          const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
           const reader = new FileReader();
           reader.onload = (evt) => {
             socket.emit('chat message', {
               senderUid: myProfile.uid,
+              senderName: myProfile.username,
               targetUid: currentChatUid,
               isGroup: isCurrentGroup,
               type: 'audio',
-              content: evt.target.result
+              content: evt.target.result,
+              timestamp: timeStr
             });
           };
           reader.readAsDataURL(blob);
@@ -1022,19 +1090,30 @@
 
         mediaRecorderAudio.start();
         recordAudioBtn.classList.add('active-rec');
+        audioSeconds = 0;
+        audioTimerEl.textContent = "00:00";
+        audioTimerEl.classList.add('active');
+        audioTimerInterval = setInterval(() => {
+          audioSeconds++;
+          audioTimerEl.textContent = formatTime(audioSeconds);
+        }, 1000);
       } catch (err) {
         alert('Не удалось получить доступ к микрофону');
       }
     });
 
     // ==========================================
-    // ВИДЕОКРУЖОЧКИ (ЗАПИСЬ)
+    // ВИДЕОКРУЖОЧКИ (ЗАПИСЬ С ТАЙМЕРОМ)
     // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
     let circleStream = null;
+    let circleTimerInterval = null;
+    let circleSeconds = 0;
+
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
+    const circleRecTimer = document.getElementById('circle-rec-timer');
 
     document.getElementById('record-circle-btn').addEventListener('click', async () => {
       try {
@@ -1047,29 +1126,43 @@
 
         mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
         mediaRecorderCircle.start();
+
+        circleSeconds = 0;
+        circleRecTimer.textContent = "00:00";
+        circleTimerInterval = setInterval(() => {
+          circleSeconds++;
+          circleRecTimer.textContent = formatTime(circleSeconds);
+        }, 1000);
       } catch (err) {
         alert('Не удалось получить доступ к камере или микрофону');
       }
     });
 
     document.getElementById('cancel-record-btn').addEventListener('click', () => {
+      clearInterval(circleTimerInterval);
       if (mediaRecorderCircle && mediaRecorderCircle.state !== 'inactive') mediaRecorderCircle.stop();
       if (circleStream) circleStream.getTracks().forEach(t => t.stop());
       recordModal.classList.remove('active');
     });
 
     document.getElementById('stop-record-btn').addEventListener('click', () => {
+      clearInterval(circleTimerInterval);
       if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') {
         mediaRecorderCircle.onstop = () => {
           const blob = new Blob(circleChunks, { type: 'video/webm' });
+          const now = new Date();
+          const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
           const reader = new FileReader();
           reader.onload = (evt) => {
             socket.emit('chat message', {
               senderUid: myProfile.uid,
+              senderName: myProfile.username,
               targetUid: currentChatUid,
               isGroup: isCurrentGroup,
               type: 'circle',
-              content: evt.target.result
+              content: evt.target.result,
+              timestamp: timeStr
             });
           };
           reader.readAsDataURL(blob);
