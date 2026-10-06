@@ -117,6 +117,13 @@
     .msg.mine { align-self: flex-end; background: var(--msg-mine-bg); border: 1px solid var(--border-color); }
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
+    
+    /* Кнопки контекстного меню сообщения */
+    .msg-actions {
+      display: flex; gap: 6px; margin-top: 4px; justify-content: flex-end; font-size: 11px; color: var(--text-muted);
+    }
+    .msg-action-btn { cursor: pointer; opacity: 0.7; transition: opacity 0.2s; }
+    .msg-action-btn:hover { opacity: 1; color: var(--brand-color); }
 
     .chat-media-img {
       max-width: 100%;
@@ -456,7 +463,7 @@
   <!-- Модалка смены фона -->
   <div id="bg-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
-      <h3>🖼️️ Фон чата</h3>
+      <h3>🖼 Фон чата</h3>
       <label class="call-btn" style="justify-content:center;">
         Загрузить картинку
         <input type="file" id="bg-file-input" accept="image/*" style="display:none;">
@@ -810,9 +817,12 @@
       const key = getHistoryKey(targetUid);
       const history = JSON.parse(localStorage.getItem(key) || '[]');
       
-      if (msg.id && history.some(m => m.id === msg.id)) return;
-
-      history.push(msg);
+      const existingIndex = history.findIndex(m => m.id === msg.id);
+      if (existingIndex !== -1) {
+        history[existingIndex] = msg;
+      } else {
+        history.push(msg);
+      }
       localStorage.setItem(key, JSON.stringify(history));
     }
 
@@ -820,16 +830,19 @@
       const messagesContainer = document.getElementById('messages');
       const isMine = msg.senderUid === myProfile.uid;
 
-      if (msg.id && messagesContainer.querySelector(`[data-id="${msg.id}"]`)) return;
+      let msgDiv = msg.id ? messagesContainer.querySelector(`[data-id="${msg.id}"]`) : null;
+      const isNew = !msgDiv;
 
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `msg ${isMine ? 'mine' : 'other'}`;
-      if (msg.id) msgDiv.dataset.id = msg.id;
+      if (isNew) {
+        msgDiv = document.createElement('div');
+        msgDiv.className = `msg ${isMine ? 'mine' : 'other'}`;
+        if (msg.id) msgDiv.dataset.id = msg.id;
+      }
 
       let contentHTML = '';
 
       if (msg.type === 'text') {
-        contentHTML = `<div>${escapeHTML(msg.content)}</div>`;
+        contentHTML = `<div class="msg-text-content">${escapeHTML(msg.content)}</div>`;
       } else if (msg.type === 'audio') {
         contentHTML = `<div class="audio-player-wrapper"><audio src="${msg.content}" controls style="max-width:200px; height:36px;"></audio></div>`;
       } else if (msg.type === 'circle' || msg.type === 'round' || msg.type === 'video-circle') {
@@ -846,15 +859,28 @@
         }
       }
 
+      let actionsHTML = '';
+      if (isMine) {
+        actionsHTML = `
+          <div class="msg-actions">
+            ${msg.type === 'text' ? `<span class="msg-action-btn edit-btn" onclick="editMessage('${msg.id}')">✏️ Редактировать</span>` : ''}
+            <span class="msg-action-btn delete-btn" onclick="deleteMessage('${msg.id}')">🗑️ Удалить</span>
+          </div>
+        `;
+      }
+
       msgDiv.innerHTML = `
         <div class="msg-header">
-          <span>${escapeHTML(msg.senderName || 'Пользователь')}</span>
+          <span>${escapeHTML(msg.senderName || 'Пользователь')} ${msg.edited ? '<small>(изм.)</small>' : ''}</span>
           <span>${msg.timestamp || ''}</span>
         </div>
         ${contentHTML}
+        ${actionsHTML}
       `;
 
-      messagesContainer.appendChild(msgDiv);
+      if (isNew) {
+        messagesContainer.appendChild(msgDiv);
+      }
       
       const circleEl = msgDiv.querySelector('.video-circle-container');
       if (circleEl) {
@@ -866,6 +892,75 @@
 
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+
+    // РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ СООБЩЕНИЙ В ИНТЕРФЕЙСЕ
+    window.editMessage = function(msgId) {
+      if (!currentChatUid) return;
+      const history = JSON.parse(localStorage.getItem(getHistoryKey(currentChatUid)) || '[]');
+      const msg = history.find(m => m.id === msgId);
+      if (!msg) return;
+
+      const newText = prompt('Отредактируйте сообщение:', msg.content);
+      if (newText !== null && newText.trim() !== '' && newText !== msg.content) {
+        msg.content = newText.trim();
+        msg.edited = true;
+        saveMessageToHistory(currentChatUid, msg);
+        appendMessageToUI(msg);
+
+        socket.emit('edit-message', {
+          msgId: msgId,
+          newContent: msg.content,
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: isCurrentGroup
+        });
+      }
+    };
+
+    window.deleteMessage = function(msgId) {
+      if (!currentChatUid) return;
+      if (confirm('Удалить это сообщение?')) {
+        let history = JSON.parse(localStorage.getItem(getHistoryKey(currentChatUid)) || '[]');
+        history = history.filter(m => m.id !== msgId);
+        localStorage.setItem(getHistoryKey(currentChatUid), JSON.stringify(history));
+
+        const el = document.querySelector(`[data-id="${msgId}"]`);
+        if (el) el.remove();
+
+        socket.emit('delete-message', {
+          msgId: msgId,
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: isCurrentGroup
+        });
+      }
+    };
+
+    socket.on('message-edited', (data) => {
+      const historyKey = getHistoryKey(data.chatId);
+      let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      const msg = history.find(m => m.id === data.msgId);
+      if (msg) {
+        msg.content = data.newContent;
+        msg.edited = true;
+        localStorage.setItem(historyKey, JSON.stringify(history));
+        if (currentChatUid === data.chatId) {
+          appendMessageToUI(msg);
+        }
+      }
+    });
+
+    socket.on('message-deleted', (data) => {
+      if (currentChatUid) {
+        const historyKey = getHistoryKey(currentChatUid);
+        let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        history = history.filter(m => m.id !== data.msgId);
+        localStorage.setItem(historyKey, JSON.stringify(history));
+      }
+
+      const el = document.querySelector(`[data-id="${data.msgId}"]`);
+      if (el) el.remove();
+    });
 
     function sendMessage() {
       const input = document.getElementById('input');
