@@ -260,6 +260,27 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ДОБАВЛЕНО: Обработка события смены камеры во время WebRTC звонка
+  socket.on('switch-camera-offer', (data) => {
+    const fromUid = socket.userData ? socket.userData.uid : '';
+    if (data && data.targetUid) {
+      io.to(data.targetUid).emit('switch-camera-offer', {
+        fromUid: fromUid,
+        offer: data.offer
+      });
+    }
+  });
+
+  socket.on('switch-camera-answer', (data) => {
+    const fromUid = socket.userData ? socket.userData.uid : '';
+    if (data && data.targetUid) {
+      io.to(data.targetUid).emit('switch-camera-answer', {
+        fromUid: fromUid,
+        answer: data.answer
+      });
+    }
+  });
+
   socket.on('end-call', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
     if (data.targetUid) {
