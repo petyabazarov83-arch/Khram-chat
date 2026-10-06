@@ -113,6 +113,16 @@
     .msg.other { align-self: flex-start; background: var(--msg-other-bg); border: 1px solid var(--border-color); }
     .msg-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; color: var(--brand-color); font-weight: bold; margin-bottom: 4px; }
 
+    /* МЕДИАЭЛЕМЕНТЫ В СООБЩЕНИЯХ */
+    .chat-media-img {
+      max-width: 100%;
+      max-height: 250px;
+      border-radius: 8px;
+      margin-top: 4px;
+      object-fit: cover;
+      cursor: pointer;
+    }
+
     /* КРУЖОЧКИ В СТИЛЕ TELEGRAM */
     .video-circle-container {
       width: clamp(140px, 45vw, 200px);
@@ -257,6 +267,43 @@
       border-radius: 12px;
       font-size: 12px;
       font-weight: bold;
+    }
+
+    /* АДАПТИВНОСТЬ ДЛЯ ПК БРАУЗЕРОВ */
+    @media (min-width: 768px) {
+      #app {
+        flex-direction: row;
+        max-width: 1200px;
+        margin: 0 auto;
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+      }
+      #main-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 320px;
+        border-right: 1px solid var(--border-color);
+      }
+      .nav-tabs {
+        position: absolute;
+        top: 57px;
+        left: 0;
+        width: 320px;
+        border-right: 1px solid var(--border-color);
+      }
+      .page {
+        margin-top: 105px;
+        width: 320px !important;
+        border-right: 1px solid var(--border-color);
+      }
+      #chat-window-modal {
+        position: relative !important;
+        flex: 1 !important;
+        width: auto !important;
+        display: flex !important;
+        z-index: 1 !important;
+      }
     }
   </style>
 </head>
@@ -435,6 +482,7 @@
       <button id="toggle-mic-btn" class="call-btn">🎤 Вкл</button>
       <button id="toggle-cam-btn" class="call-btn">📷 Вкл</button>
       <button id="switch-cam-btn" class="call-btn">🔄 Камера</button>
+      <button id="share-screen-btn" class="call-btn">🖥️ Экран</button>
       <button id="accept-call-btn" class="call-btn" style="display:none;">Ответить</button>
       <button id="end-call-btn" class="call-btn danger">Завершить</button>
     </div>
@@ -446,7 +494,8 @@
       <video id="circle-preview" autoplay playsinline muted></video>
       <div id="circle-rec-timer" class="circle-recording-overlay">00:00</div>
     </div>
-    <div style="display:flex; gap:10px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+      <button class="call-btn" id="switch-circle-cam-btn">🔄 Камера</button>
       <button class="call-btn danger" id="cancel-record-btn">Отмена</button>
       <button class="call-btn" id="stop-record-btn">Отправить</button>
     </div>
@@ -800,7 +849,11 @@
           </div>
         `;
       } else if (msg.type === 'file') {
-        contentHTML = `<a href="${msg.content}" download="${msg.fileName || 'file'}" style="color:var(--brand-color); text-decoration:underline; font-weight:bold;">📁 ${escapeHTML(msg.fileName || 'Скачать файл')}</a>`;
+        if (msg.fileType && msg.fileType.startsWith('image/')) {
+          contentHTML = `<img src="${msg.content}" class="chat-media-img" onclick="window.open('${msg.content}', '_blank')">`;
+        } else {
+          contentHTML = `<a href="${msg.content}" download="${msg.fileName || 'file'}" style="color:var(--brand-color); text-decoration:underline; font-weight:bold;">📁 ${escapeHTML(msg.fileName || 'Скачать файл')}</a>`;
+        }
       }
 
       msgDiv.innerHTML = `
@@ -834,6 +887,8 @@
         timestamp: timeStr
       };
 
+      appendMessageToUI(msgData);
+      saveMessageToHistory(currentChatUid, msgData);
       socket.emit('chat message', msgData);
       input.value = '';
     }
@@ -861,10 +916,13 @@
           type: 'file',
           content: evt.target.result,
           fileName: file.name,
+          fileType: file.type,
           fileSize: file.size,
           timestamp: timeStr
         };
 
+        appendMessageToUI(msgData);
+        saveMessageToHistory(currentChatUid, msgData);
         socket.emit('chat message', msgData);
         e.target.value = '';
       };
@@ -1058,7 +1116,7 @@
 
           const reader = new FileReader();
           reader.onload = (evt) => {
-            socket.emit('chat message', {
+            const audioMsg = {
               id: 'audio-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
               senderUid: myProfile.uid,
               senderName: myProfile.username,
@@ -1067,7 +1125,11 @@
               type: 'audio',
               content: evt.target.result,
               timestamp: timeStr
-            });
+            };
+
+            appendMessageToUI(audioMsg);
+            saveMessageToHistory(currentChatUid, audioMsg);
+            socket.emit('chat message', audioMsg);
           };
           reader.readAsDataURL(blob);
           stream.getTracks().forEach(track => track.stop());
@@ -1095,17 +1157,41 @@
     let circleStream = null;
     let circleTimerInterval = null;
     let circleSeconds = 0;
+    let circleFacingMode = "user";
 
     const recordModal = document.getElementById('record-modal');
     const circlePreview = document.getElementById('circle-preview');
     const circleRecTimer = document.getElementById('circle-rec-timer');
 
+    async function startCircleStream() {
+      if (circleStream) {
+        circleStream.getTracks().forEach(t => t.stop());
+      }
+      circleStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: circleFacingMode }, 
+        audio: true 
+      });
+      circlePreview.srcObject = circleStream;
+    }
+
+    document.getElementById('switch-circle-cam-btn').addEventListener('click', async () => {
+      circleFacingMode = (circleFacingMode === "user") ? "environment" : "user";
+      if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') {
+        await startCircleStream();
+        // Пересоздаем MediaRecorder с новым потоком
+        mediaRecorderCircle = new MediaRecorder(circleStream);
+        mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
+        mediaRecorderCircle.start();
+      } else {
+        await startCircleStream();
+      }
+    });
+
     document.getElementById('record-circle-btn').addEventListener('click', async () => {
       if (!currentChatUid) return alert('Сначала откройте чат для отправки кружка!');
       
       try {
-        circleStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
-        circlePreview.srcObject = circleStream;
+        await startCircleStream();
         recordModal.classList.add('active');
 
         mediaRecorderCircle = new MediaRecorder(circleStream);
@@ -1131,6 +1217,8 @@
               timestamp: timeStr
             };
             
+            appendMessageToUI(circleMsg);
+            saveMessageToHistory(currentChatUid, circleMsg);
             socket.emit('chat message', circleMsg);
           };
           reader.readAsDataURL(blob);
@@ -1170,10 +1258,11 @@
     });
 
     // ==========================================
-    // ЗВОНКИ WEBRTC (ИСПРАВЛЕНА МАРШРУТИЗАЦИЯ И МЕШ-СЕТЬ ДЛЯ ГРУПП)
+    // ЗВОНКИ WEBRTC И ДЕМОНСТРАЦИЯ ЭКРАНА
     // ==========================================
     let peerConnections = {}; // { remoteUid: RTCPeerConnection }
     let localStream = null;
+    let screenStream = null;
     let currentFacingMode = 'user';
     let incomingOfferData = null;
 
@@ -1184,6 +1273,7 @@
     const toggleMicBtn = document.getElementById('toggle-mic-btn');
     const toggleCamBtn = document.getElementById('toggle-cam-btn');
     const acceptCallBtn = document.getElementById('accept-call-btn');
+    const shareScreenBtn = document.getElementById('share-screen-btn');
 
     toggleMicBtn.addEventListener('click', () => {
       if (localStream) {
@@ -1226,6 +1316,50 @@
         });
       } catch (e) {}
     });
+
+    shareScreenBtn.addEventListener('click', async () => {
+      if (!screenStream) {
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          const screenTrack = screenStream.getVideoTracks()[0];
+          
+          localVideo.srcObject = screenStream;
+
+          Object.values(peerConnections).forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(screenTrack);
+          });
+
+          shareScreenBtn.textContent = '🖥️ Стоп экран';
+          shareScreenBtn.classList.add('danger');
+
+          screenTrack.onended = () => {
+            stopScreenSharing();
+          };
+        } catch (err) {
+          alert('Не удалось запустить демонстрацию экрана');
+        }
+      } else {
+        stopScreenSharing();
+      }
+    });
+
+    function stopScreenSharing() {
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+      }
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        localVideo.srcObject = localStream;
+        Object.values(peerConnections).forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender && videoTrack) sender.replaceTrack(videoTrack);
+        });
+      }
+      shareScreenBtn.textContent = '🖥️ Экран';
+      shareScreenBtn.classList.remove('danger');
+    }
 
     async function initLocalStream() {
       if (!localStream) {
@@ -1342,6 +1476,8 @@
       // Остановка рингтона
       ringtoneAudio.pause();
       ringtoneAudio.currentTime = 0;
+
+      if (screenStream) stopScreenSharing();
 
       socket.emit('end-call', { targetUid: currentChatUid, isGroup: isCurrentGroup });
 
