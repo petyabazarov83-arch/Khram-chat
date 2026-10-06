@@ -126,6 +126,43 @@ io.on('connection', (socket) => {
     }
   });
 
+  // НОВЫЕ СОБЫТИЯ: Редактирование и Удаление сообщений на сервере
+  socket.on('edit-message', (data) => {
+    if (!data || !data.msgId || !data.targetUid) return;
+    const chatId = data.isGroup ? data.targetUid : [data.senderUid, data.targetUid].sort().join('_');
+    const history = messageHistory.get(chatId) || [];
+    const msg = history.find(m => m.id === data.msgId);
+    if (msg) {
+      msg.content = data.newContent;
+      msg.edited = true;
+    }
+
+    const payload = { msgId: data.msgId, newContent: data.newContent, chatId: data.isGroup ? data.targetUid : data.senderUid };
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('message-edited', payload);
+    } else {
+      io.to(data.targetUid).emit('message-edited', { ...payload, chatId: data.senderUid });
+      io.to(data.senderUid).emit('message-edited', { ...payload, chatId: data.targetUid });
+    }
+  });
+
+  socket.on('delete-message', (data) => {
+    if (!data || !data.msgId || !data.targetUid) return;
+    const chatId = data.isGroup ? data.targetUid : [data.senderUid, data.targetUid].sort().join('_');
+    if (messageHistory.has(chatId)) {
+      const history = messageHistory.get(chatId).filter(m => m.id !== data.msgId);
+      messageHistory.set(chatId, history);
+    }
+
+    const payload = { msgId: data.msgId };
+    if (data.isGroup) {
+      io.to(data.targetUid).emit('message-deleted', payload);
+    } else {
+      io.to(data.targetUid).emit('message-deleted', payload);
+      io.to(data.senderUid).emit('message-deleted', payload);
+    }
+  });
+
   socket.on('get-chat-history', (data) => {
     if (!data || !data.targetUid || !data.myUid) return;
     const chatId = data.isGroup ? data.targetUid : (
