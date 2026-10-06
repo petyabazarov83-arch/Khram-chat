@@ -2,20 +2,15 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 
-// Файл для хранения данных на сервере
-const DATA_FILE = path.join(__dirname, 'db.json');
-
-// Лимиты для отправки тяжелых файлов/кружков
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 5e8, // 500 MB
+  maxHttpBufferSize: 5e8, // 500 MB для пересылки медиа
   pingTimeout: 120000,
   pingInterval: 25000,
   cors: {
@@ -26,46 +21,9 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Структуры данных
-let users = new Map();
-let groups = new Map();
-let messageHistory = new Map();
-
-// Функция загрузки данных из локального файла db.json
-function loadData() {
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      const rawData = fs.readFileSync(DATA_FILE, 'utf8');
-      const parsed = JSON.parse(rawData);
-
-      if (parsed.groups) {
-        groups = new Map(Object.entries(parsed.groups));
-      }
-      if (parsed.messageHistory) {
-        messageHistory = new Map(Object.entries(parsed.messageHistory));
-      }
-      console.log('📦 Данные сервера успешно загружены из db.json');
-    } catch (err) {
-      console.error('⚠️ Ошибка чтения файла базы данных db.json:', err);
-    }
-  }
-}
-
-// Функция сохранения данных в db.json
-function saveData() {
-  try {
-    const dataToSave = {
-      groups: Object.fromEntries(groups),
-      messageHistory: Object.fromEntries(messageHistory)
-    };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
-  } catch (err) {
-    console.error('⚠️️ Ошибка сохранения в db.json:', err);
-  }
-}
-
-// Загружаем сохраненные сообщения и группы
-loadData();
+const users = new Map();
+const groups = new Map();
+const messageHistory = new Map();
 
 const BOT_UID = 'bot-assistant';
 
@@ -105,8 +63,6 @@ io.on('connection', (socket) => {
 
     if (history.length > 500) history.shift();
 
-    saveData(); // Сохраняем на диск
-
     if (msg.targetUid === BOT_UID) {
       io.to(msg.senderUid).emit('chat message', msg);
 
@@ -122,7 +78,6 @@ io.on('connection', (socket) => {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         history.push(botReply);
-        saveData();
         io.to(msg.senderUid).emit('chat message', botReply);
       }, 500);
 
@@ -132,6 +87,7 @@ io.on('connection', (socket) => {
     if (msg.isGroup) {
       io.to(msg.targetUid).emit('chat message', msg);
     } else {
+      // Отправляем получателю и ВСЕМ устройствам отправителя
       io.to(msg.targetUid).emit('chat message', msg);
       io.to(msg.senderUid).emit('chat message', msg);
     }
@@ -158,7 +114,6 @@ io.on('connection', (socket) => {
     };
 
     groups.set(groupId, newGroup);
-    saveData();
 
     for (const [sId, uProfile] of users.entries()) {
       if (members.includes(uProfile.uid)) {
@@ -181,7 +136,6 @@ io.on('connection', (socket) => {
       messageHistory.delete(chatId);
       socket.emit('chat-deleted', { chatId: data.chatId, isGroup: false });
     }
-    saveData();
   });
 
   socket.on('sync-contacts', (phones) => {
@@ -206,7 +160,7 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // WebRTC Сигналинг звонков
+  // WebRTC Сигналинг
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
@@ -278,5 +232,5 @@ function generateBotResponse(text) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Сервер ХРАМ запущен на порту ${PORT}`);
+  console.log(`Сервер ХРАМ запущен на порту ${PORT}`);
 });
