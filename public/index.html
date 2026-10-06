@@ -38,7 +38,6 @@
       display: flex; height: 100vh; width: 100vw; position: relative; overflow: hidden;
     }
 
-    /* АДАПТИВНОСТЬ ДЛЯ ПК И МОБИЛЬНЫХ */
     #sidebar {
       width: 320px; display: flex; flex-direction: column;
       border-right: 1px solid var(--border-color); background: var(--bg-panel); flex-shrink: 0;
@@ -128,7 +127,6 @@
 
     .btn-send { background: var(--brand-color); border: none; color: #000; font-weight: bold; }
 
-    /* МОДАЛЬНЫЕ ОКНА */
     .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
     .modal.active { display: flex !important; }
 
@@ -159,7 +157,7 @@
 <body>
 
   <div id="app">
-    <!-- ЛЕВАЯ ПАНЕЛЬ (СПИСОК ЧАТОВ И НАСТРОЙКИ) -->
+    <!-- СИДЕБАР ЛЕВАЯ ПАНЕЛЬ -->
     <div id="sidebar">
       <header>
         <div class="brand">
@@ -233,7 +231,7 @@
       </div>
     </div>
 
-    <!-- ПРАВАЯ ПАНЕЛЬ (ОКНО ЧАТА) -->
+    <!-- ОСНОВНАЯ ПАНЕЛЬ ЧАТА (ПОЛЕ ВВОДА, КНОПКИ) -->
     <div id="main-content">
       <div id="chat-header" style="background:var(--bg-panel); padding:8px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
         <button class="btn-icon" id="close-chat-btn">←</button>
@@ -245,7 +243,7 @@
           </div>
         </div>
         <div style="display:flex; gap:6px;">
-          <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️</button>
+          <button class="btn-icon" id="bg-settings-btn" title="Фон чата">🖼️️</button>
           <button class="btn-icon" id="delete-chat-btn" title="Удалить чат" style="color: #ef4444;">🗑</button>
           <button class="call-btn" id="start-call-btn">📞 Звонок</button>
         </div>
@@ -253,6 +251,7 @@
 
       <div id="messages"></div>
 
+      <!-- ВЕРНУТО ПОЛЕ ВВОДА И ВСЕ КНОПКИ (КЛИПСА, МИКРОФОН, КРУЖОК, СТРЕЛКА) -->
       <div id="controls">
         <div class="input-row">
           <label class="btn-icon" title="Отправить файл">
@@ -268,12 +267,10 @@
     </div>
   </div>
 
-  <!-- Модалка просмотра видеокружочка -->
   <div id="circle-modal" onclick="closeCircleModal()">
     <video id="circle-modal-video" autoplay playsinline loop></video>
   </div>
 
-  <!-- Модалка создания группы -->
   <div id="group-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); width:100%; max-width:320px;">
       <h3>👥 Создать группу</h3>
@@ -286,7 +283,6 @@
     </div>
   </div>
 
-  <!-- Модалка смены фона -->
   <div id="bg-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
       <h3>🖼️ Фон чата</h3>
@@ -299,7 +295,6 @@
     </div>
   </div>
 
-  <!-- Окно звонка с поддержкой демонстрации экрана -->
   <div id="call-modal">
     <div id="call-user-info" style="color:#fff; font-size:18px; font-weight:bold; margin-bottom:10px; display:flex; align-items:center; gap:10px;">
       <div id="call-avatar" class="chat-avatar" style="width:40px; height:40px;">👥</div>
@@ -323,7 +318,6 @@
     </div>
   </div>
 
-  <!-- Запись кружка с кнопкой смены камеры -->
   <div id="record-modal">
     <div id="circle-preview-wrapper">
       <video id="circle-preview" autoplay playsinline muted></video>
@@ -388,7 +382,6 @@
       }
     });
 
-    // Навигация
     const tabBtns = document.querySelectorAll('.tab-btn');
     const pages = document.querySelectorAll('.page');
 
@@ -404,7 +397,6 @@
       });
     });
 
-    // Темы
     const themeSelect = document.getElementById('theme-select');
     const brandColorSelect = document.getElementById('brand-color-select');
     const brandTitle = document.getElementById('brand-title');
@@ -429,7 +421,6 @@
     themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
-    // Рингтон
     let customRingtone = localStorage.getItem('khram_ringtone') || null;
     let ringtoneAudio = new Audio();
     if (customRingtone) {
@@ -471,7 +462,6 @@
       document.getElementById('play-ringtone-btn').textContent = '▶ Прослушать';
     });
 
-    // Контакты
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
     let myGroups = JSON.parse(localStorage.getItem('khram_groups') || '[]');
     let activeOnlineUids = [];
@@ -573,7 +563,6 @@
       openChat('bot-assistant', 'ИИ Помощник 🤖', '🤖', false);
     });
 
-    // Окно чата
     let currentChatUid = null;
     let isCurrentGroup = false;
 
@@ -671,13 +660,9 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // НАДЕЖНАЯ ОТПРАВКА ЛЮБЫХ СООБЩЕНИЙ С СИСТЕМОЙ ФИКСА И ОТОБРАЖЕНИЯ
     function sendRawMessage(msgData) {
-      // 1. Сразу сохраняем локально, чтобы оно МОМЕНТАЛЬНО появилось
       saveMessageToHistory(currentChatUid, msgData);
       appendMessageToUI(msgData);
-
-      // 2. Отправляем через Сокет
       socket.emit('chat message', msgData);
     }
 
@@ -706,7 +691,6 @@
     document.getElementById('send-btn').addEventListener('click', sendMessage);
     document.getElementById('input').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-    // ИСПРАВЛЕНА ОТПРАВКА ФАЙЛОВ
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -761,7 +745,6 @@
       }
     });
 
-    // Удаление чата
     document.getElementById('delete-chat-btn').addEventListener('click', () => {
       if (!currentChatUid) return;
       if (confirm('Удалить этот чат?')) {
@@ -797,7 +780,6 @@
       circleModal.classList.remove('active');
     }
 
-    // Группа
     const groupModal = document.getElementById('group-modal');
     document.getElementById('create-group-btn').addEventListener('click', () => {
       const listDiv = document.getElementById('group-members-list');
@@ -833,7 +815,6 @@
       }
     });
 
-    // Фон
     const bgModal = document.getElementById('bg-modal');
     document.getElementById('bg-settings-btn').addEventListener('click', () => bgModal.classList.add('active'));
     document.getElementById('close-bg-btn').addEventListener('click', () => bgModal.classList.remove('active'));
@@ -860,7 +841,6 @@
       }
     });
 
-    // ИСПРАВЛЕНА ЗАПИСЬ И ОТПРАВКА ГОЛОСОВЫХ
     let mediaRecorderAudio = null;
     let audioChunks = [];
     let audioTimerInterval = null;
@@ -927,7 +907,6 @@
       }
     });
 
-    // ИСПРАВЛЕНА ЗАПИСЬ КРУЖКОВ + КНОПКА ПЕРЕКЛЮЧЕНИЯ КАМЕРЫ ДЛЯ КРУЖКОВ
     let mediaRecorderCircle = null;
     let circleChunks = [];
     let circleStream = null;
@@ -996,11 +975,9 @@
       }, 1000);
     });
 
-    // Переключение камеры во время или перед записью кружка
     document.getElementById('switch-circle-cam-btn').addEventListener('click', async () => {
       circleFacingMode = (circleFacingMode === 'user') ? 'environment' : 'user';
       if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') {
-        // Переключение видеопотока "на лету"
         const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: circleFacingMode } });
         const newVideoTrack = newStream.getVideoTracks()[0];
         
@@ -1030,7 +1007,6 @@
       }
     });
 
-    // WEBRTC ЗВОНКИ И ДЕМОНСТРАЦИЯ ЭКРАНА
     let peerConnections = {};
     let localStream = null;
     let currentFacingMode = 'user';
@@ -1068,7 +1044,6 @@
       }
     });
 
-    // Смена камеры в звонках
     document.getElementById('switch-cam-btn').addEventListener('click', async () => {
       if (!localStream || isScreenSharing) return;
       currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
@@ -1089,7 +1064,6 @@
       } catch (e) {}
     });
 
-    // НОВАЯ ФИЧА: ДЕМОНСТРАЦИЯ ЭКРАНА (ПК И СМАРТФОНЫ)
     shareScreenBtn.addEventListener('click', async () => {
       if (!localStream) return;
 
@@ -1098,7 +1072,6 @@
           const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
           const screenTrack = screenStream.getVideoTracks()[0];
 
-          // Заменяем трек в текущих WebRTC соединениях
           Object.values(peerConnections).forEach(pc => {
             const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) sender.replaceTrack(screenTrack);
