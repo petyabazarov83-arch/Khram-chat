@@ -10,7 +10,7 @@ app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 5e8, // 500 MB для пересылки медиа
+  maxHttpBufferSize: 5e8, // 500 MB
   pingTimeout: 120000,
   pingInterval: 25000,
   cors: {
@@ -59,9 +59,12 @@ io.on('connection', (socket) => {
       messageHistory.set(chatId, []);
     }
     const history = messageHistory.get(chatId);
-    history.push(msg);
-
-    if (history.length > 500) history.shift();
+    
+    // Предотвращение дублирования
+    if (!history.some(m => m.id === msg.id)) {
+      history.push(msg);
+      if (history.length > 500) history.shift();
+    }
 
     if (msg.targetUid === BOT_UID) {
       io.to(msg.senderUid).emit('chat message', msg);
@@ -87,7 +90,6 @@ io.on('connection', (socket) => {
     if (msg.isGroup) {
       io.to(msg.targetUid).emit('chat message', msg);
     } else {
-      // Отправляем получателю и ВСЕМ устройствам отправителя
       io.to(msg.targetUid).emit('chat message', msg);
       io.to(msg.senderUid).emit('chat message', msg);
     }
@@ -165,26 +167,13 @@ io.on('connection', (socket) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
-    if (data.isGroup) {
-      const group = groups.get(data.targetUid);
-      socket.to(data.targetUid).emit('incoming-call', {
-        fromUid: senderUid,
-        fromName: senderName,
-        offer: data.offer,
-        isGroup: true,
-        groupId: data.targetUid,
-        groupName: group ? group.name : 'Групповой звонок',
-        groupMembers: group ? group.members : []
-      });
-    } else {
-      socket.to(data.targetUid).emit('incoming-call', {
-        fromUid: senderUid,
-        fromName: senderName,
-        offer: data.offer,
-        isGroup: false,
-        targetUid: data.targetUid
-      });
-    }
+    socket.to(data.targetUid).emit('incoming-call', {
+      fromUid: senderUid,
+      fromName: senderName,
+      offer: data.offer,
+      isGroup: data.isGroup,
+      targetUid: data.targetUid
+    });
   });
 
   socket.on('make-answer', (data) => {
@@ -205,9 +194,7 @@ io.on('connection', (socket) => {
 
   socket.on('end-call', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    if (data.isGroup && data.targetUid) {
-      socket.to(data.targetUid).emit('call-ended', { fromUid });
-    } else if (data.targetUid) {
+    if (data.targetUid) {
       io.to(data.targetUid).emit('call-ended', { fromUid });
     }
   });
