@@ -1,310 +1,288 @@
 const express = require('express');
 const http = require('http');
-const path = require('path');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-
-// Увеличиваем лимиты размера передаваемых данных в HTTP-запросах
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
-
-// Настройки WebSocket для поддержки передачи крупных файлов, видеокружков и групповых звонков
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8, // Лимит 100 МБ на один WebSocket-пакет
-  pingTimeout: 60000,     // 60 секунд ожидания ответа
-  pingInterval: 25000,    // Пинг каждые 25 секунд
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  maxHttpBufferSize: 1e8 // 100 MB для пересылки больших файлов, аудио и видео
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// ==========================================
+// ХРАНИЛИЩА ДАННЫХ В ПАМЯТИ СЕРВЕРА
+// ==========================================
+// Подключенные пользователи: socket.id -> profileData
+const users = new Map();
 
-// Хранилища данных сервера Храма
-const registeredUsers = new Map();
-const socketToUid = new Map();
+// Сохраненные группы: groupId -> { id, name, members, ownerUid }
 const groups = new Map();
 
-function broadcastOnlineUsers() {
-  const onlineUids = Array.from(socketToUid.values());
-  io.emit('online-users-list', Array.from(new Set(onlineUids)));
-}
+// История сообщений: chatId -> [ array of messages ]
+const messageHistory = new Map();
 
-function cleanPhone(phoneStr) {
-  if (!phoneStr) return '';
-  const digits = String(phoneStr).replace(/\D/g, '');
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
+// ИИ Помощник Бот
+const BOT_UID = 'bot-assistant';
 
+// ==========================================
+// ОСНОВНАЯ ЛОГИКА SOCKET.IO
+// ==========================================
 io.on('connection', (socket) => {
 
-  // Регистрация / сохранение профиля
-  socket.on('register', (user) => {
-    if (!user || !user.uid) return;
+  // ------------------------------------------
+  // 1. РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ И АВТО-ВХОД В КОМНАТЫ
+  // ------------------------------------------
+  socket.on('register', (profile) => {
+    if (!profile || !profile.uid) return;
 
-    socketToUid.set(socket.id, user.uid);
+    socket.userData = profile;
+    users.set(socket.id, profile);
 
-    let userData = registeredUsers.get(user.uid) || { socketIds: new Set() };
-    userData.uid = user.uid;
-    userData.username = user.username || 'Путник';
-    userData.avatar = user.avatar || '';
-    userData.phoneRaw = user.phone || '';
-    userData.phoneClean = cleanPhone(user.phone);
+    // Присоединяем персональный сокет к комнате собственного UID (нужно для синхронизации нескольких устройств)
+    socket.join(profile.uid);
 
-    if (!userData.socketIds) userData.socketIds = new Set();
-    userData.socketIds.add(socket.id);
-
-    registeredUsers.set(user.uid, userData);
-    
-    // Подключаем сокет к личной комнате пользователя
-    socket.join(user.uid);
-
-    // Подключаем сокет ко всем группам, членом которых является пользователь
-    groups.forEach((g) => {
-      if (g.members && (g.members.has(user.uid) || Array.from(g.members).includes(user.uid))) {
-        socket.join(g.id);
+    // Автоматически подключаем к комнатам групп, где состоит этот UID
+    groups.forEach((group, groupId) => {
+      if (group.members.includes(profile.uid) || group.ownerUid === profile.uid) {
+        socket.join(groupId);
       }
     });
 
+    // Отправляем обновленный список онлайн-пользователей
     broadcastOnlineUsers();
-
-    io.emit('user-profile-updated', {
-      uid: userData.uid,
-      username: userData.username,
-      avatar: userData.avatar,
-      phone: userData.phoneRaw
-    });
   });
 
-  // Синхронизация контактов по телефонам
-  socket.on('sync-contacts', (phoneNumbers) => {
-    if (!Array.isArray(phoneNumbers)) return;
+  // ------------------------------------------
+  // 2. ОБРАБОТКА И МАРШРУТИЗАЦИЯ СООБЩЕНИЙ
+  // ------------------------------------------
+  socket.on('chat message', (msg) => {
+    if (!msg || !msg.targetUid) return;
 
-    const searchPhonesClean = phoneNumbers
-      .map(p => cleanPhone(p))
-      .filter(p => p.length >= 7);
+    const chatId = msg.isGroup ? msg.targetUid : (
+      [msg.senderUid, msg.targetUid].sort().join('_')
+    );
 
-    const matchedUsers = [];
+    // Сохраняем в историю сервера
+    if (!messageHistory.has(chatId)) {
+      messageHistory.set(chatId, []);
+    }
+    messageHistory.get(chatId).push(msg);
 
-    registeredUsers.forEach((u) => {
-      if (u.phoneClean && searchPhonesClean.includes(u.phoneClean)) {
-        matchedUsers.push({
-          uid: u.uid,
-          name: u.username,
-          avatar: u.avatar,
-          phone: u.phoneRaw
-        });
-      }
-    });
+    // Если сообщение адресовано ИИ-Помощнику
+    if (msg.targetUid === BOT_UID) {
+      // Отправляем само сообщение отправителю
+      io.to(msg.senderUid).emit('chat message', msg);
 
-    socket.emit('contacts-synced', matchedUsers);
+      // Генерируем авто-ответ от ИИ Помощника
+      setTimeout(() => {
+        const botReply = {
+          id: 'bot-msg-' + Date.now(),
+          senderUid: BOT_UID,
+          senderName: 'ИИ Помощник 🤖',
+          targetUid: msg.senderUid,
+          isGroup: false,
+          type: 'text',
+          content: generateBotResponse(msg.content),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        
+        if (!messageHistory.has(chatId)) messageHistory.set(chatId, []);
+        messageHistory.get(chatId).push(botReply);
+
+        io.to(msg.senderUid).emit('chat message', botReply);
+      }, 600);
+
+      return;
+    }
+
+    // Если это ГРУППОВОЙ ЧАТ
+    if (msg.isGroup) {
+      // Рассылаем абсолютно всем в комнате группы (включая все устройства отправителя)
+      io.to(msg.targetUid).emit('chat message', msg);
+    } 
+    // Если это ЛИЧНЫЙ ЧАТ
+    else {
+      // 1. Отправляем получателю (на все его устройства)
+      io.to(msg.targetUid).emit('chat message', msg);
+
+      // 2. Дублируем отправку на ВСЕ остальные устройства самого отправителя
+      io.to(msg.senderUid).emit('chat message', msg);
+    }
   });
 
-  // Создание групп
-  socket.on('create-group', ({ name, members, ownerUid }) => {
-    const groupId = 'group-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-    const membersSet = new Set(members || []);
-    membersSet.add(ownerUid);
+  // ------------------------------------------
+  // 3. ЗАПРОС ИСТОРИИ СООБЩЕНИЙ С СЕРВЕРА
+  // ------------------------------------------
+  socket.on('get-chat-history', (data) => {
+    const chatId = data.isGroup ? data.targetUid : (
+      [data.myUid, data.targetUid].sort().join('_')
+    );
+    const history = messageHistory.get(chatId) || [];
+    socket.emit('chat-history', { chatId, history });
+  });
+
+  // ------------------------------------------
+  // 4. СОЗДАНИЕ И УПРАВЛЕНИЕ ГРУППАМИ
+  // ------------------------------------------
+  socket.on('create-group', (groupData) => {
+    const groupId = 'group-' + Math.random().toString(36).substring(2, 9);
+    const members = Array.from(new Set([...(groupData.members || []), groupData.ownerUid]));
 
     const newGroup = {
       id: groupId,
-      name: name || 'Новая Группа',
-      ownerUid: ownerUid,
-      admins: new Set([ownerUid]),
-      members: membersSet,
-      bgImage: ''
+      name: groupData.name || 'Новая группа',
+      members: members,
+      ownerUid: groupData.ownerUid
     };
 
     groups.set(groupId, newGroup);
 
-    membersSet.forEach(mUid => {
-      const u = registeredUsers.get(mUid);
-      if (u && u.socketIds) {
-        u.socketIds.forEach(sId => {
-          const clientSocket = io.sockets.sockets.get(sId);
-          if (clientSocket) clientSocket.join(groupId);
-        });
+    // Подключаем все сокеты найденных онлайн-участников к новой комнате Socket.IO
+    for (const [sId, uProfile] of users.entries()) {
+      if (members.includes(uProfile.uid)) {
+        const memberSocket = io.sockets.sockets.get(sId);
+        if (memberSocket) {
+          memberSocket.join(groupId);
+        }
       }
-      
-      io.to(mUid).emit('group-created', {
-        id: newGroup.id,
-        name: newGroup.name,
-        ownerUid: newGroup.ownerUid,
-        admins: Array.from(newGroup.admins),
-        members: Array.from(newGroup.members),
-        bgImage: newGroup.bgImage
-      });
-    });
-  });
-
-  // Изменение и синхронизация фона в группе
-  socket.on('update-group-bg', ({ groupId, bgImage, userUid }) => {
-    const g = groups.get(groupId);
-    if (g) {
-      g.bgImage = bgImage;
-      io.to(groupId).emit('group-bg-updated', { groupId, bgImage });
     }
+
+    // Рассылаем уведомление о создании всем участникам
+    io.to(groupId).emit('group-created', newGroup);
   });
 
-  // Отправка сообщений, файлов и медиа (ИСПРАВЛЕНО ДОСТАВЛЕНИЕ)
-  socket.on('chat message', (data) => {
-    if (!data) return;
-
-    const sender = registeredUsers.get(data.senderUid) || {
-      uid: data.senderUid,
-      username: 'Пользователь',
-      avatar: ''
-    };
-
-    const msgPayload = {
-      id: data.id || Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-      senderUid: sender.uid,
-      senderName: sender.username,
-      senderAvatar: sender.avatar,
-      targetUid: data.targetUid,
-      isGroup: Boolean(data.isGroup),
-      type: data.type || 'text',
-      content: data.content || '',
-      fileData: data.fileData || null,
-      fileName: data.fileName || '',
-      fileSize: data.fileSize || 0,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    // Если сообщение в группу
+  // ------------------------------------------
+  // 5. УДАЛЕНИЕ ЧАТА / ГРУППЫ
+  // ------------------------------------------
+  socket.on('delete-chat', (data) => {
     if (data.isGroup) {
-      io.to(data.targetUid).emit('chat message', msgPayload);
-      return;
-    }
-
-    // Ответ ИИ Помощника Храма
-    if (data.targetUid === 'bot-assistant') {
-      socket.emit('chat message', msgPayload);
-      setTimeout(() => {
-        socket.emit('chat message', {
-          id: Date.now() + 1,
-          senderUid: 'bot-assistant',
-          senderName: 'ИИ Помощник 🤖',
-          targetUid: sender.uid,
-          isGroup: false,
-          type: 'text',
-          content: `🤖 Принято в Храме! Сообщение "${data.fileName || data.content || 'Файл'}" успешно обработано.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
-      }, 400);
-      return;
-    }
-
-    // Рассылка личного сообщения обоим участникам (отправителю и получателю)
-    io.to(sender.uid).emit('chat message', msgPayload);
-    io.to(data.targetUid).emit('chat message', msgPayload);
-  });
-
-  // Удаление сообщений
-  socket.on('delete message', (data) => {
-    if (data.isGroup) {
-      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
-    } else {
-      io.to(data.senderUid).emit('message deleted', { msgId: data.msgId });
-      io.to(data.targetUid).emit('message deleted', { msgId: data.msgId });
-    }
-  });
-
-  // Удаление чатов
-  socket.on('delete-chat', ({ chatId, isGroup, userUid }) => {
-    if (isGroup) {
+      const chatId = data.chatId;
       groups.delete(chatId);
+      messageHistory.delete(chatId);
       io.to(chatId).emit('chat-deleted', { chatId, isGroup: true });
     } else {
-      io.to(userUid).emit('chat-deleted', { chatId, isGroup: false });
-      io.to(chatId).emit('chat-deleted', { chatId, isGroup: false });
+      const chatId = [data.userUid, data.chatId].sort().join('_');
+      messageHistory.delete(chatId);
+      socket.emit('chat-deleted', { chatId: data.chatId, isGroup: false });
     }
   });
 
-  // ==========================================
-  // ЗВОНКИ (ЛИЧНЫЕ И ГРУППОВЫЕ WEBRTC)
-  // ==========================================
+  // ------------------------------------------
+  // 6. СИНХРОНИЗАЦИЯ И ПОИСК КОНТАКТОВ
+  // ------------------------------------------
+  socket.on('sync-contacts', (phones) => {
+    if (!Array.isArray(phones)) return;
+
+    const matchedContacts = [];
+    const cleanPhones = phones.map(p => String(p).replace(/\D/g, ''));
+
+    users.forEach((profile) => {
+      if (profile.phone) {
+        const userCleanPhone = String(profile.phone).replace(/\D/g, '');
+        if (userCleanPhone && cleanPhones.includes(userCleanPhone)) {
+          matchedContacts.push({
+            uid: profile.uid,
+            name: profile.username,
+            avatar: profile.avatar,
+            phone: profile.phone
+          });
+        }
+      }
+    });
+
+    socket.emit('contacts-synced', matchedContacts);
+  });
+
+  // ------------------------------------------
+  // 7. WEBRTC СИГНАЛИНГ (ЗВОНКИ И ВИДЕО)
+  // ------------------------------------------
   socket.on('call-user', (data) => {
-    const sender = registeredUsers.get(data.senderUid);
-    const payload = {
-      fromUid: data.senderUid,
-      fromName: sender ? sender.username : 'Собеседник',
-      fromAvatar: sender ? sender.avatar : '',
-      offer: data.offer,
-      isGroup: data.isGroup || false,
-      targetUid: data.targetUid
-    };
+    const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
+    const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
     if (data.isGroup) {
-      socket.to(data.targetUid).emit('incoming-call', payload);
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: senderUid,
+        fromName: senderName,
+        offer: data.offer,
+        isGroup: true,
+        targetUid: data.targetUid
+      });
     } else {
-      io.to(data.targetUid).emit('incoming-call', payload);
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: senderUid,
+        fromName: senderName,
+        offer: data.offer,
+        isGroup: false
+      });
     }
   });
 
   socket.on('make-answer', (data) => {
-    const senderUid = socketToUid.get(socket.id);
-    const payload = {
-      answer: data.answer,
-      fromUid: senderUid
-    };
-
-    if (data.isGroup) {
-      socket.to(data.targetUid).emit('call-answered', payload);
-    } else if (data.targetUid) {
-      io.to(data.targetUid).emit('call-answered', payload);
-    }
+    const fromUid = socket.userData ? socket.userData.uid : '';
+    socket.to(data.targetUid).emit('call-answered', {
+      fromUid: fromUid,
+      answer: data.answer
+    });
   });
 
   socket.on('ice-candidate', (data) => {
-    const senderUid = socketToUid.get(socket.id);
-    const payload = {
-      candidate: data.candidate,
-      fromUid: senderUid
-    };
-
-    if (data.isGroup) {
-      socket.to(data.targetUid).emit('ice-candidate', payload);
-    } else if (data.targetUid) {
-      io.to(data.targetUid).emit('ice-candidate', payload);
-    }
+    const fromUid = socket.userData ? socket.userData.uid : '';
+    socket.to(data.targetUid).emit('ice-candidate', {
+      fromUid: fromUid,
+      candidate: data.candidate
+    });
   });
 
   socket.on('end-call', (data) => {
-    const senderUid = socketToUid.get(socket.id);
-    if (data.targetUid) {
-      if (data.isGroup) {
-        socket.to(data.targetUid).emit('call-ended', { fromUid: senderUid });
-      } else {
-        io.to(data.targetUid).emit('call-ended', { fromUid: senderUid });
-      }
+    const fromUid = socket.userData ? socket.userData.uid : '';
+    if (data.isGroup) {
+      socket.to(data.targetUid).emit('call-ended', { fromUid: fromUid });
+    } else {
+      socket.to(data.targetUid).emit('call-ended', { fromUid: fromUid });
     }
   });
 
+  // ------------------------------------------
+  // 8. ОТКЛЮЧЕНИЕ СОКЕТА
+  // ------------------------------------------
   socket.on('disconnect', () => {
-    const uid = socketToUid.get(socket.id);
-    socketToUid.delete(socket.id);
-
-    if (uid) {
-      const userData = registeredUsers.get(uid);
-      if (userData && userData.socketIds) {
-        userData.socketIds.delete(socket.id);
-        if (userData.socketIds.size === 0) {
-          broadcastOnlineUsers();
-        }
-      }
-    }
+    users.delete(socket.id);
+    broadcastOnlineUsers();
   });
+
+  // Вспомогательная функция отправки онлайн-пользователей
+  function broadcastOnlineUsers() {
+    const onlineUids = Array.from(new Set(Array.from(users.values()).map(u => u.uid)));
+    io.emit('online-users-list', onlineUids);
+  }
 });
 
+// ------------------------------------------
+// ПРОСТАЯ ЛОГИКА ОТВЕТОВ ИИ ПОМОЩНИКА
+// ------------------------------------------
+function generateBotResponse(text) {
+  const lower = (text || '').toLowerCase();
+  if (lower.includes('привет') || lower.includes('здравствуй')) {
+    return 'Приветствую! Чем могу помочь в мессенджере Храм?';
+  }
+  if (lower.includes('как дела')) {
+    return 'Всё отлично, работаю 24/7 и готов передавать твои сообщения!';
+  }
+  if (lower.includes('звонок') || lower.includes('видео')) {
+    return 'Чтобы совершить звонок, открой нужный чат и нажми кнопку «📞 Звонок» сверху.';
+  }
+  return `Вы написали: "${text}". Я ИИ Помощник, ваш локальный ассистент!`;
+}
+
+// ------------------------------------------
+// ЗАПУСК СЕРВЕРА
+// ------------------------------------------
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Сервер Храма запущен на порту ${PORT}`);
+  console.log(`=================================`);
+  console.log(`Сервер ХРАМ успешно запущен на порту ${PORT}`);
+  console.log(`=================================`);
 });
