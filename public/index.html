@@ -488,7 +488,7 @@
   <!-- Запись кружка -->
   <div id="record-modal">
     <div id="circle-preview-wrapper">
-      <video id="circle-preview" autoplay playsinline muted></video>
+      <canvas id="circle-preview" width="480" height="480" style="width:100%; height:100%; border-radius:50%; border:4px solid var(--brand-color); object-fit:cover; background:#000;"></canvas>
       <div id="circle-rec-timer" class="circle-recording-overlay">00:00</div>
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
@@ -1133,53 +1133,83 @@
       }
     });
 
-    // ВИДЕОКРУЖКИ
+    // ==========================================
+    // ВИДЕОКРУЖКИ (Переключение камер на лету через Canvas)
+    // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
     let circleStream = null;
     let circleTimerInterval = null;
     let circleSeconds = 0;
-    let circleFacingMode = "user";
+    let circleVideoDevices = [];
+    let currentCircleDeviceIndex = 0;
 
-    const recordModal = document.getElementById('record-modal');
-    const circlePreview = document.getElementById('circle-preview');
-    const circleRecTimer = document.getElementById('circle-rec-timer');
+    const circleCanvas = document.getElementById('circle-preview');
+    const circleCtx = circleCanvas.getContext('2d');
+    const circleHiddenVideo = document.createElement('video');
+    circleHiddenVideo.autoplay = true;
+    circleHiddenVideo.playsinline = true;
+    circleHiddenVideo.muted = true;
 
-    async function startCircleStream() {
+    let circleCanvasAnimFrame = null;
+
+    function drawCircleToCanvas() {
+      if (circleHiddenVideo.readyState >= 2) {
+        const minDim = Math.min(circleHiddenVideo.videoWidth, circleHiddenVideo.videoHeight);
+        const sx = (circleHiddenVideo.videoWidth - minDim) / 2;
+        const sy = (circleHiddenVideo.videoHeight - minDim) / 2;
+        circleCtx.drawImage(circleHiddenVideo, sx, sy, minDim, minDim, 0, 0, 480, 480);
+      }
+      circleCanvasAnimFrame = requestAnimationFrame(drawCircleToCanvas);
+    }
+
+    async function getCameraDevices() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.filter(d => d.kind === 'videoinput');
+    }
+
+    async function startCircleCameraStream(deviceId = null) {
       if (circleStream) {
         circleStream.getTracks().forEach(t => t.stop());
       }
+
+      const videoConstraints = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'user' };
+      
       circleStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: circleFacingMode }, 
+        video: videoConstraints, 
         audio: true 
       });
-      circlePreview.srcObject = circleStream;
+
+      circleHiddenVideo.srcObject = circleStream;
+      await circleHiddenVideo.play().catch(() => {});
     }
 
-    document.getElementById('switch-circle-cam-btn').addEventListener('click', async () => {
-      circleFacingMode = (circleFacingMode === "user") ? "environment" : "user";
-      await startCircleStream();
-      if (mediaRecorderCircle && mediaRecorderCircle.state === 'recording') {
-        mediaRecorderCircle.stop();
-        mediaRecorderCircle = new MediaRecorder(circleStream);
-        mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
-        mediaRecorderCircle.start();
-      }
-    });
-
     document.getElementById('record-circle-btn').addEventListener('click', async () => {
-      if (!currentChatUid) return alert('Сначала откройте чат для отправки кружка!');
-      
-      try {
-        await startCircleStream();
-        recordModal.classList.add('active');
+      if (!currentChatUid) return alert('Сначала откройте чат!');
 
-        mediaRecorderCircle = new MediaRecorder(circleStream);
+      try {
+        circleVideoDevices = await getCameraDevices();
+        currentCircleDeviceIndex = 0;
+
+        await startCircleCameraStream(circleVideoDevices[0]?.deviceId);
+        
+        drawCircleToCanvas();
+        const canvasStream = circleCanvas.captureStream(30);
+        
+        const audioTrack = circleStream.getAudioTracks()[0];
+        if (audioTrack) canvasStream.addTrack(audioTrack);
+
+        document.getElementById('record-modal').classList.add('active');
+
+        mediaRecorderCircle = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
         circleChunks = [];
 
-        mediaRecorderCircle.ondataavailable = e => circleChunks.push(e.data);
-        
+        mediaRecorderCircle.ondataavailable = e => {
+          if (e.data.size > 0) circleChunks.push(e.data);
+        };
+
         mediaRecorderCircle.onstop = () => {
+          cancelAnimationFrame(circleCanvasAnimFrame);
           const blob = new Blob(circleChunks, { type: 'video/webm' });
           const now = new Date();
           const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
@@ -1204,30 +1234,45 @@
           reader.readAsDataURL(blob);
 
           if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-          recordModal.classList.remove('active');
+          document.getElementById('record-modal').classList.remove('active');
         };
 
-        mediaRecorderCircle.start();
+        mediaRecorderCircle.start(100);
 
         circleSeconds = 0;
+        const circleRecTimer = document.getElementById('circle-rec-timer');
         circleRecTimer.textContent = "00:00";
         circleTimerInterval = setInterval(() => {
           circleSeconds++;
           circleRecTimer.textContent = formatTime(circleSeconds);
         }, 1000);
+
       } catch (err) {
         alert('Не удалось получить доступ к камере или микрофону');
       }
     });
 
+    document.getElementById('switch-circle-cam-btn').addEventListener('click', async () => {
+      if (circleVideoDevices.length < 2) {
+        circleVideoDevices = await getCameraDevices();
+        if (circleVideoDevices.length < 2) return alert('На устройстве найдена только одна камера.');
+      }
+
+      currentCircleDeviceIndex = (currentCircleDeviceIndex + 1) % circleVideoDevices.length;
+      const nextDeviceId = circleVideoDevices[currentCircleDeviceIndex].deviceId;
+
+      await startCircleCameraStream(nextDeviceId);
+    });
+
     document.getElementById('cancel-record-btn').addEventListener('click', () => {
       clearInterval(circleTimerInterval);
+      cancelAnimationFrame(circleCanvasAnimFrame);
       if (mediaRecorderCircle && mediaRecorderCircle.state !== 'inactive') {
         mediaRecorderCircle.onstop = null;
         mediaRecorderCircle.stop();
       }
       if (circleStream) circleStream.getTracks().forEach(t => t.stop());
-      recordModal.classList.remove('active');
+      document.getElementById('record-modal').classList.remove('active');
     });
 
     document.getElementById('stop-record-btn').addEventListener('click', () => {
@@ -1237,12 +1282,15 @@
       }
     });
 
-    // WEBRTC И ЗВОНКИ
+    // ==========================================
+    // WEBRTC И ЗВОНКИ (Демонстрация и выбор устройств)
+    // ==========================================
     let peerConnections = {};
     let localStream = null;
     let screenStream = null;
-    let currentFacingMode = 'user';
     let incomingOfferData = null;
+    let callVideoDevices = [];
+    let currentCallDeviceIndex = 0;
 
     const callModal = document.getElementById('call-modal');
     const localVideo = document.getElementById('local-video');
@@ -1277,39 +1325,64 @@
 
     document.getElementById('switch-cam-btn').addEventListener('click', async () => {
       if (!localStream) return;
-      currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
 
       try {
-        const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
-        const newVideoTrack = newStream.getVideoTracks()[0];
-
-        const oldTrack = localStream.getVideoTracks()[0];
-        if (oldTrack) {
-          localStream.removeTrack(oldTrack);
-          oldTrack.stop();
+        callVideoDevices = await getCameraDevices();
+        if (callVideoDevices.length < 2) {
+          return alert('На вашем устройстве только одна видеокамера');
         }
+
+        currentCallDeviceIndex = (currentCallDeviceIndex + 1) % callVideoDevices.length;
+        const nextDeviceId = callVideoDevices[currentCallDeviceIndex].deviceId;
+
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: nextDeviceId } }
+        });
         
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        const oldVideoTrack = localStream.getVideoTracks()[0];
+
+        if (oldVideoTrack) {
+          localStream.removeTrack(oldVideoTrack);
+          oldVideoTrack.stop();
+        }
+
         localStream.addTrack(newVideoTrack);
         localVideo.srcObject = localStream;
 
         Object.values(peerConnections).forEach(pc => {
-          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-          if (sender) sender.replaceTrack(newVideoTrack);
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            videoSender.replaceTrack(newVideoTrack);
+          }
         });
-      } catch (e) {}
+      } catch (e) {
+        alert('Ошибка при переключении камеры: ' + e.message);
+      }
     });
 
     shareScreenBtn.addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        return alert('Ваш браузер или устройство не поддерживает демонстрацию экрана.');
+      }
+
       if (!screenStream) {
         try {
-          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: "always" },
+            audio: false
+          });
+
           const screenTrack = screenStream.getVideoTracks()[0];
-          
           localVideo.srcObject = screenStream;
 
           Object.values(peerConnections).forEach(pc => {
-            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) sender.replaceTrack(screenTrack);
+            const senders = pc.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(screenTrack);
+            }
           });
 
           shareScreenBtn.textContent = '🖥️ Стоп экран';
@@ -1319,7 +1392,9 @@
             stopScreenSharing();
           };
         } catch (err) {
-          alert('Не удалось запустить демонстрацию экрана');
+          if (err.name !== 'NotAllowedError') {
+            alert('Не удалось запустить трансляцию экрана: ' + err.message);
+          }
         }
       } else {
         stopScreenSharing();
@@ -1331,15 +1406,21 @@
         screenStream.getTracks().forEach(t => t.stop());
         screenStream = null;
       }
+
       if (localStream) {
         const videoTrack = localStream.getVideoTracks()[0];
         localVideo.srcObject = localStream;
+
         Object.values(peerConnections).forEach(pc => {
-          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-          if (sender && videoTrack) sender.replaceTrack(videoTrack);
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender && videoTrack) {
+            videoSender.replaceTrack(videoTrack);
+          }
         });
       }
-      shareScreenBtn.textContent = '🖥️️ Экран';
+
+      shareScreenBtn.textContent = '🖥️ Экран';
       shareScreenBtn.classList.remove('danger');
     }
 
