@@ -556,6 +556,52 @@
     brandColorSelect.addEventListener('change', (e) => applyBrandColor(e.target.value));
 
     // ==========================================
+    // РИНГТОН ЗВОНКА
+    // ==========================================
+    let customRingtone = localStorage.getItem('khram_ringtone') || null;
+    let ringtoneAudio = new Audio();
+
+    if (customRingtone) {
+      document.getElementById('ringtone-status').textContent = 'Пользовательский рингтон загружен';
+      ringtoneAudio.src = customRingtone;
+    }
+
+    document.getElementById('ringtone-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          customRingtone = evt.target.result;
+          localStorage.setItem('khram_ringtone', customRingtone);
+          ringtoneAudio.src = customRingtone;
+          document.getElementById('ringtone-status').textContent = 'Пользовательский рингтон загружен';
+          alert('Рингтон сохранен!');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById('play-ringtone-btn').addEventListener('click', () => {
+      if (ringtoneAudio.paused) {
+        ringtoneAudio.play().catch(() => {});
+        document.getElementById('play-ringtone-btn').textContent = '⏸ Остановить';
+      } else {
+        ringtoneAudio.pause();
+        ringtoneAudio.currentTime = 0;
+        document.getElementById('play-ringtone-btn').textContent = '▶ Прослушать';
+      }
+    });
+
+    document.getElementById('reset-ringtone-btn').addEventListener('click', () => {
+      localStorage.removeItem('khram_ringtone');
+      customRingtone = null;
+      ringtoneAudio.pause();
+      ringtoneAudio = new Audio();
+      document.getElementById('ringtone-status').textContent = 'Стандартный рингтон';
+      document.getElementById('play-ringtone-btn').textContent = '▶ Прослушать';
+    });
+
+    // ==========================================
     // ПОИСК ПОЛЬЗОВАТЕЛЕЙ И КОНТАКТЫ
     // ==========================================
     let contacts = JSON.parse(localStorage.getItem('khram_contacts') || '[]');
@@ -631,7 +677,7 @@
         div.innerHTML = `
           <div style="display:flex; align-items:center; gap:12px; flex:1;">
             <div class="chat-avatar" style="background:var(--brand-color); color:#000;">👥</div>
-            <div><strong>${escapeHTML(g.name)}</strong><div style="font-size:12px; color:var(--text-muted);">Группа</div></div>
+            <div><strong>${escapeHTML(g.name)}</strong><div style="font-size:12px; color:var(--text-muted);">Групповой чат</div></div>
           </div>
         `;
         chatList.appendChild(div);
@@ -731,7 +777,6 @@
       localStorage.setItem(key, JSON.stringify(history));
     }
 
-    /* ФИКС: Гарантированное отображение всех типов контента */
     function appendMessageToUI(msg) {
       const messagesContainer = document.getElementById('messages');
       const isMine = msg.senderUid === myProfile.uid;
@@ -798,7 +843,6 @@
       if (e.key === 'Enter') sendMessage();
     });
 
-    /* ФИКС: МНОГОКРАТНАЯ И БЕСПРЕПЯТСТВЕННАЯ ОТПРАВКА ЛЮБЫХ ФАЙЛОВ И ZIP-АРХИВОВ */
     document.getElementById('file-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
@@ -822,13 +866,11 @@
         };
 
         socket.emit('chat message', msgData);
-        // Сбрасываем значение input, чтобы можно было заново отправлять тот же или любой другой файл
         e.target.value = '';
       };
       reader.readAsDataURL(file);
     });
 
-    /* ОБРАБОТЧИК ПОЛУЧЕНИЯ ВСЕХ ВХОДЯЩИХ И СВОИХ СООБЩЕНИЙ С СЕРВЕРА */
     socket.on('chat message', (msg) => {
       let chatKeyUid;
 
@@ -837,7 +879,6 @@
       } else {
         chatKeyUid = (msg.senderUid === myProfile.uid) ? msg.targetUid : msg.senderUid;
 
-        // Если пришло сообщение от нового пользователя, добавляем его в список
         if (msg.senderUid !== myProfile.uid && !contacts.some(c => c.uid === msg.senderUid)) {
           contacts.push({
             uid: msg.senderUid,
@@ -849,10 +890,8 @@
         }
       }
 
-      // 1. Сохраняем в локальную историю
       saveMessageToHistory(chatKeyUid, msg);
 
-      // 2. Отображаем на экране, если у нас открыт этот чат
       if (currentChatUid === chatKeyUid) {
         appendMessageToUI(msg);
       }
@@ -1049,7 +1088,7 @@
     });
 
     // ==========================================
-    // ФИКС: ЗАПИСЬ И ОТПРАВКА ВИДЕОКРУЖОЧКОВ
+    // ЗАПИСЬ И ОТПРАВКА ВИДЕОКРУЖОЧКОВ
     // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
@@ -1092,7 +1131,6 @@
               timestamp: timeStr
             };
             
-            // Отправляем сокет-сообщение
             socket.emit('chat message', circleMsg);
           };
           reader.readAsDataURL(blob);
@@ -1132,9 +1170,9 @@
     });
 
     // ==========================================
-    // ЗВОНКИ WEBRTC
+    // ЗВОНКИ WEBRTC (ИСПРАВЛЕНА МАРШРУТИЗАЦИЯ И МЕШ-СЕТЬ ДЛЯ ГРУПП)
     // ==========================================
-    let peerConnections = {};
+    let peerConnections = {}; // { remoteUid: RTCPeerConnection }
     let localStream = null;
     let currentFacingMode = 'user';
     let incomingOfferData = null;
@@ -1203,27 +1241,60 @@
       callModal.classList.add('active');
       acceptCallBtn.style.display = 'none';
 
-      const pc = createPeerConnection(currentChatUid);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      if (isCurrentGroup) {
+        // Находим группу для отправки офферов участникам
+        const groupObj = myGroups.find(g => g.id === currentChatUid);
+        const members = groupObj ? groupObj.members : [];
 
-      socket.emit('call-user', {
-        senderUid: myProfile.uid,
-        targetUid: currentChatUid,
-        isGroup: isCurrentGroup,
-        offer: offer
-      });
+        // Создаем WebRTC соединения со всеми известными участниками группы
+        for (const memberUid of members) {
+          if (memberUid !== myProfile.uid) {
+            const pc = createPeerConnection(memberUid);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            socket.emit('call-user', {
+              senderUid: myProfile.uid,
+              targetUid: currentChatUid,
+              isGroup: true,
+              offer: offer
+            });
+          }
+        }
+      } else {
+        const pc = createPeerConnection(currentChatUid);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        socket.emit('call-user', {
+          senderUid: myProfile.uid,
+          targetUid: currentChatUid,
+          isGroup: false,
+          offer: offer
+        });
+      }
     });
 
     socket.on('incoming-call', async (data) => {
       incomingOfferData = data;
-      document.getElementById('call-username').textContent = `${data.fromName} (Входящий...)`;
+      
+      // Воспроизведение рингтона при входящем звонке
+      if (customRingtone) {
+        ringtoneAudio.loop = true;
+        ringtoneAudio.play().catch(() => {});
+      }
+
+      document.getElementById('call-username').textContent = `${data.fromName} (${data.isGroup ? 'Групповой входящий...' : 'Входящий...'})`;
       acceptCallBtn.style.display = 'flex';
       callModal.classList.add('active');
     });
 
     acceptCallBtn.addEventListener('click', async () => {
       acceptCallBtn.style.display = 'none';
+
+      // Остановка рингтона при ответе
+      ringtoneAudio.pause();
+      ringtoneAudio.currentTime = 0;
 
       await initLocalStream();
 
@@ -1268,6 +1339,10 @@
     });
 
     function endCall() {
+      // Остановка рингтона
+      ringtoneAudio.pause();
+      ringtoneAudio.currentTime = 0;
+
       socket.emit('end-call', { targetUid: currentChatUid, isGroup: isCurrentGroup });
 
       Object.keys(peerConnections).forEach(uid => {
@@ -1285,8 +1360,15 @@
     }
 
     function createPeerConnection(remoteUid) {
+      if (peerConnections[remoteUid]) {
+        return peerConnections[remoteUid];
+      }
+
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
       });
 
       peerConnections[remoteUid] = pc;
@@ -1324,13 +1406,21 @@
         video.playsinline = true;
         video.srcObject = stream;
 
+        // Поиск имени собеседника
+        let name = 'Собеседник';
+        const foundContact = contacts.find(c => c.uid === remoteUid);
+        if (foundContact) name = foundContact.name;
+
         const label = document.createElement('div');
         label.className = 'user-label';
-        label.textContent = 'Собеседник';
+        label.textContent = name;
 
         card.appendChild(video);
         card.appendChild(label);
         videoGrid.appendChild(card);
+      } else {
+        const video = card.querySelector('video');
+        if (video) video.srcObject = stream;
       }
     }
 
