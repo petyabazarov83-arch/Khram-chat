@@ -6,11 +6,12 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
+// Увеличиваем лимиты для передачи тяжелых медиаданных
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 const io = new Server(server, {
-  maxHttpBufferSize: 5e8, // 500 MB для пересылки медиа
+  maxHttpBufferSize: 5e8, // 500 MB для отправки медиа/кружков/файлов
   pingTimeout: 120000,
   pingInterval: 25000,
   cors: {
@@ -87,7 +88,6 @@ io.on('connection', (socket) => {
     if (msg.isGroup) {
       io.to(msg.targetUid).emit('chat message', msg);
     } else {
-      // Отправляем получателю и ВСЕМ устройствам отправителя
       io.to(msg.targetUid).emit('chat message', msg);
       io.to(msg.senderUid).emit('chat message', msg);
     }
@@ -160,7 +160,7 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // WebRTC Сигналинг
+  // WebRTC Сигналинг звонков
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
