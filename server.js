@@ -162,12 +162,12 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // WebRTC Сигналинг
+  // WebRTC Сигналинг (Полная рассылка всем участникам)
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
-    socket.to(data.targetUid).emit('incoming-call', {
+    io.to(data.targetUid).emit('incoming-call', {
       fromUid: senderUid,
       fromName: senderName,
       offer: data.offer,
