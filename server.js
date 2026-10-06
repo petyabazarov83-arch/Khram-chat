@@ -5,8 +5,12 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+
+// Увеличенный буфер для передачи тяжелых медиафайлов, видеокружков и голосовых
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100 MB для пересылки больших файлов, аудио и видео
+  maxHttpBufferSize: 1e8, // 100 MB
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -40,10 +44,10 @@ io.on('connection', (socket) => {
     socket.userData = profile;
     users.set(socket.id, profile);
 
-    // Присоединяем персональный сокет к комнате собственного UID (нужно для синхронизации нескольких устройств)
+    // Присоединяем персональный сокет к комнате собственного UID
     socket.join(profile.uid);
 
-    // Автоматически подключаем к комнатам групп, где состоит этот UID
+    // Автоматически подключаем к комнатам всех групп, где состоит этот UID
     groups.forEach((group, groupId) => {
       if (group.members.includes(profile.uid) || group.ownerUid === profile.uid) {
         socket.join(groupId);
@@ -68,14 +72,18 @@ io.on('connection', (socket) => {
     if (!messageHistory.has(chatId)) {
       messageHistory.set(chatId, []);
     }
-    messageHistory.get(chatId).push(msg);
+    const history = messageHistory.get(chatId);
+    history.push(msg);
+
+    // Ограничиваем историю в RAM до 300 последних сообщений
+    if (history.length > 300) history.shift();
 
     // Если сообщение адресовано ИИ-Помощнику
     if (msg.targetUid === BOT_UID) {
-      // Отправляем само сообщение отправителю
+      // Эхо отправленного сообщения
       io.to(msg.senderUid).emit('chat message', msg);
 
-      // Генерируем авто-ответ от ИИ Помощника
+      // Ответ бота
       setTimeout(() => {
         const botReply = {
           id: 'bot-msg-' + Date.now(),
@@ -88,27 +96,23 @@ io.on('connection', (socket) => {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         
-        if (!messageHistory.has(chatId)) messageHistory.set(chatId, []);
-        messageHistory.get(chatId).push(botReply);
-
+        history.push(botReply);
         io.to(msg.senderUid).emit('chat message', botReply);
       }, 600);
 
       return;
     }
 
-    // Если это ГРУППОВОЙ ЧАТ
+    // Маршрутизация по типам чата
     if (msg.isGroup) {
-      // Рассылаем абсолютно всем в комнате группы (включая все устройства отправителя)
+      // Рассылка абсолютно всем в комнате группы (включая все устройства отправителя)
       io.to(msg.targetUid).emit('chat message', msg);
-    } 
-    // Если это ЛИЧНЫЙ ЧАТ
-    else {
-      // 1. Отправляем получателю (на все его устройства)
+    } else {
+      // 1. Отправка получателю (на все его устройства)
       io.to(msg.targetUid).emit('chat message', msg);
 
-      // 2. Дублируем отправку на ВСЕ остальные устройства самого отправителя
-      io.to(msg.senderUid).emit('chat message', msg);
+      // 2. Дублирование на другие устройства отправителя
+      socket.to(msg.senderUid).emit('chat message', msg);
     }
   });
 
@@ -139,7 +143,7 @@ io.on('connection', (socket) => {
 
     groups.set(groupId, newGroup);
 
-    // Подключаем все сокеты найденных онлайн-участников к новой комнате Socket.IO
+    // Подключаем все сокеты найденных участников к комнате группы
     for (const [sId, uProfile] of users.entries()) {
       if (members.includes(uProfile.uid)) {
         const memberSocket = io.sockets.sockets.get(sId);
@@ -149,7 +153,7 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Рассылаем уведомление о создании всем участникам
+    // Рассылаем уведомление всем участникам
     io.to(groupId).emit('group-created', newGroup);
   });
 
@@ -202,22 +206,13 @@ io.on('connection', (socket) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
-    if (data.isGroup) {
-      socket.to(data.targetUid).emit('incoming-call', {
-        fromUid: senderUid,
-        fromName: senderName,
-        offer: data.offer,
-        isGroup: true,
-        targetUid: data.targetUid
-      });
-    } else {
-      socket.to(data.targetUid).emit('incoming-call', {
-        fromUid: senderUid,
-        fromName: senderName,
-        offer: data.offer,
-        isGroup: false
-      });
-    }
+    socket.to(data.targetUid).emit('incoming-call', {
+      fromUid: senderUid,
+      fromName: senderName,
+      offer: data.offer,
+      isGroup: data.isGroup,
+      targetUid: data.targetUid
+    });
   });
 
   socket.on('make-answer', (data) => {
@@ -238,11 +233,9 @@ io.on('connection', (socket) => {
 
   socket.on('end-call', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    if (data.isGroup) {
-      socket.to(data.targetUid).emit('call-ended', { fromUid: fromUid });
-    } else {
-      socket.to(data.targetUid).emit('call-ended', { fromUid: fromUid });
-    }
+    socket.to(data.targetUid).emit('call-ended', {
+      fromUid: fromUid
+    });
   });
 
   // ------------------------------------------
@@ -253,7 +246,6 @@ io.on('connection', (socket) => {
     broadcastOnlineUsers();
   });
 
-  // Вспомогательная функция отправки онлайн-пользователей
   function broadcastOnlineUsers() {
     const onlineUids = Array.from(new Set(Array.from(users.values()).map(u => u.uid)));
     io.emit('online-users-list', onlineUids);
@@ -261,7 +253,7 @@ io.on('connection', (socket) => {
 });
 
 // ------------------------------------------
-// ПРОСТАЯ ЛОГИКА ОТВЕТОВ ИИ ПОМОЩНИКА
+// ОТВЕТЫ ИИ ПОМОЩНИКА
 // ------------------------------------------
 function generateBotResponse(text) {
   const lower = (text || '').toLowerCase();
