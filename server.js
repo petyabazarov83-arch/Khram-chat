@@ -6,13 +6,11 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// Настройка Express для приема больших payload (до 500 МБ)
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
-// Настройки Socket.IO с увеличенными таймаутами для файлов и медиа
 const io = new Server(server, {
-  maxHttpBufferSize: 5e8, // 500 MB
+  maxHttpBufferSize: 5e8, // 500 MB для пересылки медиа
   pingTimeout: 120000,
   pingInterval: 25000,
   cors: {
@@ -23,41 +21,20 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ==========================================
-// ХРАНИЛИЩА ДАННЫХ В ПАМЯТИ СЕРВЕРА
-// ==========================================
-const users = new Map(); // socket.id -> profile
-const groups = new Map(); // groupId -> groupObject
-const messageHistory = new Map(); // chatId -> Array of messages
+const users = new Map();
+const groups = new Map();
+const messageHistory = new Map();
 
 const BOT_UID = 'bot-assistant';
 
-// Вспомогательная функция поиска сокета по UID пользователя
-function getSocketIdByUid(uid) {
-  for (const [sId, profile] of users.entries()) {
-    if (profile && profile.uid === uid) {
-      return sId;
-    }
-  }
-  return null;
-}
-
-// ==========================================
-// ОСНОВНАЯ ЛОГИКА SOCKET.IO
-// ==========================================
 io.on('connection', (socket) => {
 
-  // 1. РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ
   socket.on('register', (profile) => {
     if (!profile || !profile.uid) return;
-
     socket.userData = profile;
     users.set(socket.id, profile);
-
-    // Подключаем сокет к комнате с его UID
     socket.join(profile.uid);
 
-    // Авто-вход во все его группы
     groups.forEach((group, groupId) => {
       if (group.members && group.members.includes(profile.uid)) {
         socket.join(groupId);
@@ -67,11 +44,9 @@ io.on('connection', (socket) => {
     broadcastOnlineUsers();
   });
 
-  // 2. ОБРАБОТКА И МАРШРУТИЗАЦИЯ СООБЩЕНИЙ (КРУЖКИ, ФАЙЛЫ, ТЕКСТ)
   socket.on('chat message', (msg) => {
     if (!msg || !msg.targetUid) return;
 
-    // Гарантируем наличие уникального ID сообщения
     if (!msg.id) {
       msg.id = 'msg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     }
@@ -80,17 +55,14 @@ io.on('connection', (socket) => {
       [msg.senderUid, msg.targetUid].sort().join('_')
     );
 
-    // Сохранение истории на сервере
     if (!messageHistory.has(chatId)) {
       messageHistory.set(chatId, []);
     }
     const history = messageHistory.get(chatId);
     history.push(msg);
 
-    // Ограничение истории в ОЗУ (до 500 сообщений)
     if (history.length > 500) history.shift();
 
-    // ОБРАБОТКА БОТА
     if (msg.targetUid === BOT_UID) {
       io.to(msg.senderUid).emit('chat message', msg);
 
@@ -112,22 +84,17 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // МАРШРУТИЗАЦИЯ ОБЫЧНЫХ И ГРУППОВЫХ ЧАТОВ
     if (msg.isGroup) {
-      // Отправляем ВСЕМ в комнате группы (включая отправителя)
       io.to(msg.targetUid).emit('chat message', msg);
     } else {
-      // 1. Отправка Получателю
+      // Отправляем получателю и ВСЕМ устройствам отправителя
       io.to(msg.targetUid).emit('chat message', msg);
-      // 2. Отправка Отправителю (на все его устройства)
       io.to(msg.senderUid).emit('chat message', msg);
     }
   });
 
-  // 3. ЗАПРОС ИСТОРИИ СООБЩЕНИЙ
   socket.on('get-chat-history', (data) => {
     if (!data || !data.targetUid || !data.myUid) return;
-    
     const chatId = data.isGroup ? data.targetUid : (
       [data.myUid, data.targetUid].sort().join('_')
     );
@@ -135,7 +102,6 @@ io.on('connection', (socket) => {
     socket.emit('chat-history', { chatId, targetUid: data.targetUid, history });
   });
 
-  // 4. СОЗДАНИЕ ГРУППЫ
   socket.on('create-group', (groupData) => {
     const groupId = 'group-' + Math.random().toString(36).substring(2, 9);
     const members = Array.from(new Set([...(groupData.members || []), groupData.ownerUid]));
@@ -149,7 +115,6 @@ io.on('connection', (socket) => {
 
     groups.set(groupId, newGroup);
 
-    // Подключаем участников к комнате Socket.IO
     for (const [sId, uProfile] of users.entries()) {
       if (members.includes(uProfile.uid)) {
         const memberSocket = io.sockets.sockets.get(sId);
@@ -160,7 +125,6 @@ io.on('connection', (socket) => {
     io.to(groupId).emit('group-created', newGroup);
   });
 
-  // 5. УДАЛЕНИЕ ЧАТА
   socket.on('delete-chat', (data) => {
     if (data.isGroup) {
       const chatId = data.chatId;
@@ -174,10 +138,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. СИНХРОНИЗАЦИЯ КОНТАКТОВ
   socket.on('sync-contacts', (phones) => {
     if (!Array.isArray(phones)) return;
-
     const matchedContacts = [];
     const cleanPhones = phones.map(p => String(p).replace(/\D/g, ''));
 
@@ -198,16 +160,13 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // 7. WEBRTC СИГНАЛИНГ (С ПОДДЕРЖКОЙ ЛИЧНЫХ И ГРУППОВЫХ ЗВОНКОВ)
+  // WebRTC Сигналинг
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
     if (data.isGroup) {
-      // Для группы передаем участникам список участников этой группы
       const group = groups.get(data.targetUid);
-      const members = group ? group.members : [];
-
       socket.to(data.targetUid).emit('incoming-call', {
         fromUid: senderUid,
         fromName: senderName,
@@ -215,7 +174,7 @@ io.on('connection', (socket) => {
         isGroup: true,
         groupId: data.targetUid,
         groupName: group ? group.name : 'Групповой звонок',
-        groupMembers: members
+        groupMembers: group ? group.members : []
       });
     } else {
       socket.to(data.targetUid).emit('incoming-call', {
@@ -230,7 +189,6 @@ io.on('connection', (socket) => {
 
   socket.on('make-answer', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    // Всегда отправляем конкретному получателю (по его personal UID room)
     io.to(data.targetUid).emit('call-answered', {
       fromUid: fromUid,
       answer: data.answer
@@ -239,7 +197,6 @@ io.on('connection', (socket) => {
 
   socket.on('ice-candidate', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    // Точечная отправка ICE кандидатов адресату
     io.to(data.targetUid).emit('ice-candidate', {
       fromUid: fromUid,
       candidate: data.candidate
@@ -249,17 +206,12 @@ io.on('connection', (socket) => {
   socket.on('end-call', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
     if (data.isGroup && data.targetUid) {
-      socket.to(data.targetUid).emit('call-ended', {
-        fromUid: fromUid
-      });
+      socket.to(data.targetUid).emit('call-ended', { fromUid });
     } else if (data.targetUid) {
-      io.to(data.targetUid).emit('call-ended', {
-        fromUid: fromUid
-      });
+      io.to(data.targetUid).emit('call-ended', { fromUid });
     }
   });
 
-  // 8. ОТКЛЮЧЕНИЕ СОКЕТА
   socket.on('disconnect', () => {
     users.delete(socket.id);
     broadcastOnlineUsers();
@@ -273,21 +225,12 @@ io.on('connection', (socket) => {
 
 function generateBotResponse(text) {
   const lower = (text || '').toLowerCase();
-  if (lower.includes('привет') || lower.includes('здравствуй')) {
-    return 'Приветствую! Чем могу помочь в мессенджере Храм?';
-  }
-  if (lower.includes('как дела')) {
-    return 'Всё отлично, работаю 24/7 и готов передавать твои сообщения!';
-  }
-  if (lower.includes('звонок') || lower.includes('видео')) {
-    return 'Чтобы совершить звонок, открой нужный чат и нажми кнопку «📞 Звонок» сверху.';
-  }
-  return `Вы написали: "${text}". Я ИИ Помощник, ваш локальный ассистент!`;
+  if (lower.includes('привет') || lower.includes('здравствуй')) return 'Приветствую! Чем могу помочь в мессенджере Храм?';
+  if (lower.includes('как дела')) return 'Всё отлично, работаю 24/7!';
+  return `Вы написали: "${text}". Я ИИ Помощник!`;
 }
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`=================================`);
-  console.log(`Сервер ХРАМ успешно запущен на порту ${PORT}`);
-  console.log(`=================================`);
+  console.log(`Сервер ХРАМ запущен на порту ${PORT}`);
 });
