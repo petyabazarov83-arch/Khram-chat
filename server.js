@@ -32,6 +32,16 @@ const messageHistory = new Map(); // chatId -> Array of messages
 
 const BOT_UID = 'bot-assistant';
 
+// Вспомогательная функция поиска сокета по UID пользователя
+function getSocketIdByUid(uid) {
+  for (const [sId, profile] of users.entries()) {
+    if (profile && profile.uid === uid) {
+      return sId;
+    }
+  }
+  return null;
+}
+
 // ==========================================
 // ОСНОВНАЯ ЛОГИКА SOCKET.IO
 // ==========================================
@@ -188,23 +198,40 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // 7. WEBRTC СИГНАЛИНГ
+  // 7. WEBRTC СИГНАЛИНГ (С ПОДДЕРЖКОЙ ЛИЧНЫХ И ГРУППОВЫХ ЗВОНКОВ)
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
 
-    socket.to(data.targetUid).emit('incoming-call', {
-      fromUid: senderUid,
-      fromName: senderName,
-      offer: data.offer,
-      isGroup: data.isGroup,
-      targetUid: data.targetUid
-    });
+    if (data.isGroup) {
+      // Для группы передаем участникам список участников этой группы
+      const group = groups.get(data.targetUid);
+      const members = group ? group.members : [];
+
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: senderUid,
+        fromName: senderName,
+        offer: data.offer,
+        isGroup: true,
+        groupId: data.targetUid,
+        groupName: group ? group.name : 'Групповой звонок',
+        groupMembers: members
+      });
+    } else {
+      socket.to(data.targetUid).emit('incoming-call', {
+        fromUid: senderUid,
+        fromName: senderName,
+        offer: data.offer,
+        isGroup: false,
+        targetUid: data.targetUid
+      });
+    }
   });
 
   socket.on('make-answer', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    socket.to(data.targetUid).emit('call-answered', {
+    // Всегда отправляем конкретному получателю (по его personal UID room)
+    io.to(data.targetUid).emit('call-answered', {
       fromUid: fromUid,
       answer: data.answer
     });
@@ -212,7 +239,8 @@ io.on('connection', (socket) => {
 
   socket.on('ice-candidate', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    socket.to(data.targetUid).emit('ice-candidate', {
+    // Точечная отправка ICE кандидатов адресату
+    io.to(data.targetUid).emit('ice-candidate', {
       fromUid: fromUid,
       candidate: data.candidate
     });
@@ -220,9 +248,15 @@ io.on('connection', (socket) => {
 
   socket.on('end-call', (data) => {
     const fromUid = socket.userData ? socket.userData.uid : '';
-    socket.to(data.targetUid).emit('call-ended', {
-      fromUid: fromUid
-    });
+    if (data.isGroup && data.targetUid) {
+      socket.to(data.targetUid).emit('call-ended', {
+        fromUid: fromUid
+      });
+    } else if (data.targetUid) {
+      io.to(data.targetUid).emit('call-ended', {
+        fromUid: fromUid
+      });
+    }
   });
 
   // 8. ОТКЛЮЧЕНИЕ СОКЕТА
