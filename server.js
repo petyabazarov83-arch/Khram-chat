@@ -6,6 +6,10 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
+// Настройка Express для приёма больших объемов данных (до 100 МБ)
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
 // Увеличенный буфер для передачи тяжелых медиафайлов, видеокружков и голосовых
 const io = new Server(server, {
   maxHttpBufferSize: 1e8, // 100 MB
@@ -105,14 +109,14 @@ io.on('connection', (socket) => {
 
     // Маршрутизация по типам чата
     if (msg.isGroup) {
-      // Рассылка абсолютно всем в комнате группы (включая все устройства отправителя)
+      // Рассылка абсолютно всем в комнате группы (включая отправителя)
       io.to(msg.targetUid).emit('chat message', msg);
     } else {
       // 1. Отправка получателю (на все его устройства)
       io.to(msg.targetUid).emit('chat message', msg);
 
-      // 2. Дублирование на другие устройства отправителя
-      socket.to(msg.senderUid).emit('chat message', msg);
+      // 2. Отправка самому отправителю (на все его устройства, включая текущий сокет)
+      io.to(msg.senderUid).emit('chat message', msg);
     }
   });
 
