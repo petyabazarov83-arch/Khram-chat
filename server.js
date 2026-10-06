@@ -2,12 +2,46 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 
+// Настройка папки для загрузки медиафайлов и кружочков
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.bin';
+    cb(null, 'file-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7) + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 500 * 1024 * 1024 } // Лимит 500 МБ
+});
+
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(uploadDir));
+
+// Маршрут для загрузки тяжелых файлов, фото и кружочков
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Файл не загружен' });
+  }
+  const fileUrl = '/uploads/' + req.file.filename;
+  res.json({ url: fileUrl, fileName: req.file.originalname, fileType: req.file.mimetype });
+});
 
 const io = new Server(server, {
   maxHttpBufferSize: 5e8, // 500 MB
@@ -18,8 +52,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
-
-app.use(express.static(path.join(__dirname, 'public')));
 
 const users = new Map();
 const groups = new Map();
@@ -60,7 +92,6 @@ io.on('connection', (socket) => {
     }
     const history = messageHistory.get(chatId);
     
-    // Предотвращение дублирования
     if (!history.some(m => m.id === msg.id)) {
       history.push(msg);
       if (history.length > 500) history.shift();
@@ -162,7 +193,7 @@ io.on('connection', (socket) => {
     socket.emit('contacts-synced', matchedContacts);
   });
 
-  // WebRTC Сигналинг (Полная рассылка всем участникам)
+  // WebRTC Сигналинг
   socket.on('call-user', (data) => {
     const senderUid = socket.userData ? socket.userData.uid : data.senderUid;
     const senderName = socket.userData ? socket.userData.username : 'Пользователь';
