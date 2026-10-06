@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Храм</title>
+
+  <!-- Подключение PWA Manifest и Client Script для приложений -->
+  <link rel="manifest" href="manifest.json">
+  <script src="client.js" defer></script>
+
   <style>
     :root {
       --bg-main: #0b0e14;
@@ -451,7 +456,7 @@
   <!-- Модалка смены фона -->
   <div id="bg-modal" class="modal">
     <div class="modal-content" style="background:var(--bg-panel); padding:20px; border-radius:12px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
-      <h3>🖼️ Фон чата</h3>
+      <h3>🖼️️ Фон чата</h3>
       <label class="call-btn" style="justify-content:center;">
         Загрузить картинку
         <input type="file" id="bg-file-input" accept="image/*" style="display:none;">
@@ -1418,7 +1423,7 @@
             }
           });
 
-          shareScreenBtn.textContent = '🖥️️ Стоп экран';
+          shareScreenBtn.textContent = '🖥 Стоп экран';
           shareScreenBtn.classList.add('danger');
 
           screenTrack.onended = () => {
