@@ -479,7 +479,7 @@
       <button id="toggle-mic-btn" class="call-btn">🎤 Вкл</button>
       <button id="toggle-cam-btn" class="call-btn">📷 Вкл</button>
       <button id="switch-cam-btn" class="call-btn">🔄 Камера</button>
-      <button id="share-screen-btn" class="call-btn">🖥️️ Экран</button>
+      <button id="share-screen-btn" class="call-btn">🖥 Экран</button>
       <button id="accept-call-btn" class="call-btn" style="display:none;">Ответить</button>
       <button id="end-call-btn" class="call-btn danger">Завершить</button>
     </div>
@@ -892,15 +892,33 @@
       if (e.key === 'Enter') sendMessage();
     });
 
-    document.getElementById('file-input').addEventListener('change', (e) => {
+    // Функция загрузки тяжелых файлов на сервер через POST
+    async function uploadFileToServer(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при загрузке файла');
+      }
+
+      return await response.json();
+    }
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file || !currentChatUid) return;
 
       const now = new Date();
       const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
 
-      const reader = new FileReader();
-      reader.onload = (evt) => {
+      try {
+        const uploadResult = await uploadFileToServer(file);
+
         const msgData = {
           id: 'file-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
           senderUid: myProfile.uid,
@@ -908,7 +926,7 @@
           targetUid: currentChatUid,
           isGroup: isCurrentGroup,
           type: 'file',
-          content: evt.target.result,
+          content: uploadResult.url,
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
@@ -918,9 +936,11 @@
         appendMessageToUI(msgData);
         saveMessageToHistory(currentChatUid, msgData);
         socket.emit('chat message', msgData);
+      } catch (err) {
+        alert('Не удалось отправить файл: ' + err.message);
+      } finally {
         e.target.value = '';
-      };
-      reader.readAsDataURL(file);
+      }
     });
 
     socket.on('chat message', (msg) => {
@@ -1093,13 +1113,15 @@
 
         mediaRecorderAudio.ondataavailable = e => audioChunks.push(e.data);
         
-        mediaRecorderAudio.onstop = () => {
+        mediaRecorderAudio.onstop = async () => {
           const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
           const now = new Date();
           const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
 
-          const reader = new FileReader();
-          reader.onload = (evt) => {
+          try {
+            const uploadResult = await uploadFileToServer(file);
+
             const audioMsg = {
               id: 'audio-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
               senderUid: myProfile.uid,
@@ -1107,15 +1129,17 @@
               targetUid: currentChatUid,
               isGroup: isCurrentGroup,
               type: 'audio',
-              content: evt.target.result,
+              content: uploadResult.url,
               timestamp: timeStr
             };
 
             appendMessageToUI(audioMsg);
             saveMessageToHistory(currentChatUid, audioMsg);
             socket.emit('chat message', audioMsg);
-          };
-          reader.readAsDataURL(blob);
+          } catch (err) {
+            alert('Ошибка отправки голосового сообщения');
+          }
+
           stream.getTracks().forEach(track => track.stop());
         };
 
@@ -1134,7 +1158,7 @@
     });
 
     // ==========================================
-    // ВИДЕОКРУЖКИ (Переключение камер на лету через Canvas)
+    // ВИДЕОКРУЖКИ (Отправка загруженного WebM на сервер)
     // ==========================================
     let mediaRecorderCircle = null;
     let circleChunks = [];
@@ -1208,14 +1232,16 @@
           if (e.data.size > 0) circleChunks.push(e.data);
         };
 
-        mediaRecorderCircle.onstop = () => {
+        mediaRecorderCircle.onstop = async () => {
           cancelAnimationFrame(circleCanvasAnimFrame);
           const blob = new Blob(circleChunks, { type: 'video/webm' });
+          const file = new File([blob], 'circle.webm', { type: 'video/webm' });
           const now = new Date();
           const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
 
-          const reader = new FileReader();
-          reader.onload = (evt) => {
+          try {
+            const uploadResult = await uploadFileToServer(file);
+
             const circleMsg = {
               id: 'circle-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
               senderUid: myProfile.uid,
@@ -1223,15 +1249,16 @@
               targetUid: currentChatUid,
               isGroup: isCurrentGroup,
               type: 'circle',
-              content: evt.target.result,
+              content: uploadResult.url,
               timestamp: timeStr
             };
             
             appendMessageToUI(circleMsg);
             saveMessageToHistory(currentChatUid, circleMsg);
             socket.emit('chat message', circleMsg);
-          };
-          reader.readAsDataURL(blob);
+          } catch (err) {
+            alert('Не удалось загрузить видеокружок на сервер');
+          }
 
           if (circleStream) circleStream.getTracks().forEach(t => t.stop());
           document.getElementById('record-modal').classList.remove('active');
@@ -1283,7 +1310,7 @@
     });
 
     // ==========================================
-    // WEBRTC И ЗВОНКИ (Многопользовательская сетка и трансляция)
+    // WEBRTC И ЗВОНКИ (Адаптировано под смартфоны и ПК)
     // ==========================================
     let peerConnections = {};
     let localStream = null;
@@ -1363,8 +1390,14 @@
     });
 
     shareScreenBtn.addEventListener('click', async () => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        return alert('Демонстрация экрана поддерживается только в браузерах на компьютерах и ноутбуках.');
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        return alert('Демонстрация экрана недоступна. Браузер блокирует эту функцию без HTTPS соединения или на мобильном устройстве.');
+        return alert('Демонстрация экрана недоступна в вашем браузере.');
       }
 
       if (!screenStream) {
@@ -1385,7 +1418,7 @@
             }
           });
 
-          shareScreenBtn.textContent = '🖥️ Стоп экран';
+          shareScreenBtn.textContent = '🖥️️ Стоп экран';
           shareScreenBtn.classList.add('danger');
 
           screenTrack.onended = () => {
@@ -1633,4 +1666,4 @@
     }
   </script>
 </body>
-              </html>
+  </html>
