@@ -1295,14 +1295,24 @@
     async function startCircleCameraStream(deviceId = null) {
       if (circleStream) {
         circleStream.getTracks().forEach(t => t.stop());
+        await new Promise(r => setTimeout(r, 150));
       }
 
-      const videoConstraints = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'user' };
+      let videoConstraints = deviceId 
+        ? { deviceId: { exact: deviceId } } 
+        : { facingMode: { ideal: 'user' } };
       
-      circleStream = await navigator.mediaDevices.getUserMedia({ 
-        video: videoConstraints, 
-        audio: true 
-      });
+      try {
+        circleStream = await navigator.mediaDevices.getUserMedia({ 
+          video: videoConstraints, 
+          audio: true 
+        });
+      } catch (err) {
+        circleStream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
+        });
+      }
 
       circleHiddenVideo.srcObject = circleStream;
       await circleHiddenVideo.play().catch(() => {});
@@ -1450,33 +1460,60 @@
       }
     });
 
+    // ИСПРАВЛЕННАЯ СМЕНА КАМЕРЫ ВО ВРЕМЯ ЗВОНКА
     document.getElementById('switch-cam-btn').addEventListener('click', async () => {
       if (!localStream) return;
 
       try {
         callVideoDevices = await getCameraDevices();
-        if (callVideoDevices.length < 2) {
-          return alert('На вашем устройстве только одна видеокамера');
-        }
-
-        currentCallDeviceIndex = (currentCallDeviceIndex + 1) % callVideoDevices.length;
-        const nextDeviceId = callVideoDevices[currentCallDeviceIndex].deviceId;
-
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: nextDeviceId } }
-        });
         
-        const newVideoTrack = newStream.getVideoTracks()[0];
+        let newStream;
         const oldVideoTrack = localStream.getVideoTracks()[0];
 
-        if (oldVideoTrack) {
-          localStream.removeTrack(oldVideoTrack);
-          oldVideoTrack.stop();
+        // Определяем направление или устройство
+        let targetFacingMode = 'environment';
+        if (oldVideoTrack && oldVideoTrack.getSettings) {
+          const settings = oldVideoTrack.getSettings();
+          if (settings.facingMode === 'environment') {
+            targetFacingMode = 'user';
+          }
         }
 
+        // 1. Полностью останавливаем текущий видеопоток
+        if (oldVideoTrack) {
+          oldVideoTrack.stop();
+          localStream.removeTrack(oldVideoTrack);
+        }
+
+        // 2. Пауза 200 мс для корректного освобождения оборудования ОС Android
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // 3. Запрашиваем новую камеру с безопасным откатом
+        if (callVideoDevices.length >= 2) {
+          currentCallDeviceIndex = (currentCallDeviceIndex + 1) % callVideoDevices.length;
+          const nextDeviceId = callVideoDevices[currentCallDeviceIndex].deviceId;
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: nextDeviceId } }
+            });
+          } catch (err) {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: targetFacingMode } }
+            });
+          }
+        } else {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: targetFacingMode } }
+          });
+        }
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+
+        // 4. Добавляем новый трек
         localStream.addTrack(newVideoTrack);
         localVideo.srcObject = localStream;
 
+        // 5. Обновляем WebRTC соединение
         Object.values(peerConnections).forEach(pc => {
           const senders = pc.getSenders();
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -1485,7 +1522,15 @@
           }
         });
       } catch (e) {
-        alert('Ошибка при переключении камеры: ' + e.message);
+        alert('Ошибка при переключении камеры: ' + (e.message || e));
+        
+        // Автоматическое восстановление работы видеопотока
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const fallbackTrack = fallbackStream.getVideoTracks()[0];
+          localStream.addTrack(fallbackTrack);
+          localVideo.srcObject = localStream;
+        } catch (err) {}
       }
     });
 
